@@ -15,6 +15,28 @@ type (
 	Items []Item
 )
 
+func (f Items) SortKinopoisk() {
+	sort.Slice(f, func(i, j int) bool {
+		a := f[i].RatingKinopoisk
+		b := f[j].RatingKinopoisk
+		if a == b {
+			return f[i].Title < f[j].Title
+		}
+		return a < b
+	})
+}
+
+func (f Items) SortIMDB() {
+	sort.Slice(f, func(i, j int) bool {
+		a := f[i].RatingImdb
+		b := f[j].RatingImdb
+		if a == b {
+			return f[i].Title < f[j].Title
+		}
+		return a < b
+	})
+}
+
 func (f *Item) Average() Rate {
 	var rate Rate
 	for _, v := range f.Scores {
@@ -25,7 +47,7 @@ func (f *Item) Average() Rate {
 }
 
 func (f Items) SortAverage() {
-	sort.SliceStable(f, func(i, j int) bool {
+	sort.Slice(f, func(i, j int) bool {
 		a := f[i].Average().round()
 		b := f[j].Average().round()
 		if a == b {
@@ -44,7 +66,7 @@ func (f *Item) Sum() Rate {
 }
 
 func (f Items) SortSum() {
-	sort.SliceStable(f, func(i, j int) bool {
+	sort.Slice(f, func(i, j int) bool {
 		a := f[i].Sum().round()
 		b := f[j].Sum().round()
 		if a == b {
@@ -54,12 +76,13 @@ func (f Items) SortSum() {
 	})
 }
 
+// Halva = abs(Average) * Sum
 func (f *Item) Halva() Rate {
 	return Rate(math.Abs(float64(f.Average()))) * f.Sum()
 }
 
 func (f Items) SortHalva() {
-	sort.SliceStable(f, func(i, j int) bool {
+	sort.Slice(f, func(i, j int) bool {
 		a := f[i].Halva().round()
 		b := f[j].Halva().round()
 		if a == b {

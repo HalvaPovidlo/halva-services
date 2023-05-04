@@ -1,0 +1,35 @@
+name: login_deploy
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      S_NAME: ${{ secrets.YANDEX_SERVER_NAME }}
+      S_PASSWORD: ${{ secrets.YANDEX_SSH }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: shimataro/ssh-key-action@v2.3.1
+        with:
+          key: ${{ secrets.YANDEX_SSH }}
+          known_hosts: ${{ secrets.YANDEX_HOST }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: Build
+        run: go build -o deployments/halva-login cmd/halva-auth-api/main.go
+
+      - name: Deploy
+        run: |
+          rsync -avze "ssh -o StrictHostKeyChecking=no" deployments/* "$S_NAME":/home/halva/services/
+          ssh -o StrictHostKeyChecking=no "$S_NAME" /home/halva/services/restartLogin.sh

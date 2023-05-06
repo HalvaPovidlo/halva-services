@@ -7,7 +7,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/pkg/errors"
 
+	"github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/auth"
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/user"
 )
 
@@ -90,9 +92,13 @@ func (h *handler) users(c echo.Context) error {
 func (h *handler) callback(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID, username, avatar, err := h.auth.GetDiscordInfo(ctx, c.FormValue("code"), c.FormValue("state"), c.RealIP())
-	if err != nil {
+	switch {
+	case errors.Is(err, auth.ErrUnknownUser):
+		return c.String(http.StatusNotFound, "Unknown user, ask andrei.khodko@gmail.com to add")
+	case err != nil:
 		return err
 	}
+
 	token, err := h.jwt.Generate(userID)
 	if err != nil {
 		return err

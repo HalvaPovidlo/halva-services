@@ -12,7 +12,23 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var ErrBadState = errors.New("state does not match")
+var knownUsers = map[string]struct{}{
+	"233195670125805568": {},
+	"242030987536629760": {},
+	"257456911270674433": {},
+	"320309512697413633": {},
+	"320310971593916416": {},
+	"320311179245256706": {},
+	"339482443943772160": {},
+	"397466273157480448": {},
+	"407858784354959361": {},
+	"644504316576530438": {},
+}
+
+var (
+	ErrBadState    = errors.New("state does not match")
+	ErrUnknownUser = errors.New("user unknown")
+)
 
 const (
 	authURL  = "https://discord.com/api/oauth2/authorize"
@@ -79,7 +95,11 @@ func (s *service) GetDiscordInfo(ctx context.Context, authCode, reqState, key st
 		return "", "", "", errors.Wrap(err, "unmarshal response body")
 	}
 
-	return discordUser.ID, discordUser.Username, discordUser.Avatar, errors.Wrap(err, "generate jwt token")
+	if _, ok := knownUsers[discordUser.ID]; !ok {
+		return "", "", "", ErrUnknownUser
+	}
+
+	return discordUser.ID, discordUser.Username, discordUser.Avatar, nil
 }
 
 func generateState(key string) string {

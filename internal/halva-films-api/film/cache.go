@@ -9,40 +9,42 @@ import (
 )
 
 type cache struct {
-	*pcache.Cache
+	film *pcache.Cache
+	user *pcache.Cache
 }
 
 func NewCache(defaultExpiration, cleanupInterval time.Duration) *cache {
 	return &cache{
-		Cache: pcache.New(defaultExpiration, cleanupInterval),
+		film: pcache.New(defaultExpiration, cleanupInterval),
+		user: pcache.New(defaultExpiration, cleanupInterval),
 	}
 }
 
-func (c *cache) SetFilm(item *film.Item) {
+func (c *cache) Set(item *film.Item) {
 	if item != nil {
-		c.SetDefault(item.ID, *item)
+		c.film.SetDefault(item.ID, *item)
 	}
 }
 
-func (c *cache) GetFilm(id string) (*film.Item, bool) {
-	v, ok := c.Get(id)
+func (c *cache) Get(id string) (*film.Item, bool) {
+	v, ok := c.film.Get(id)
 	if !ok {
-		return nil, ok
+		return nil, false
 	}
 	if f, ok := v.(film.Item); ok {
-		return &f, ok
+		return &f, true
 	}
 	return nil, false
 }
 
-func (c *cache) SetFilms(items film.Items) {
+func (c *cache) SetAll(items film.Items) {
 	for i := range items {
-		c.SetFilm(&items[i])
+		c.Set(&items[i])
 	}
 }
 
-func (c *cache) AllFilms() film.Items {
-	items := c.Items()
+func (c *cache) All() film.Items {
+	items := c.film.Items()
 	result := make(film.Items, 0, len(items))
 	for _, v := range items {
 		if f, ok := v.Object.(film.Item); ok {
@@ -50,4 +52,19 @@ func (c *cache) AllFilms() film.Items {
 		}
 	}
 	return result
+}
+
+func (c *cache) SetUser(userID string, items film.Items) {
+	c.user.SetDefault(userID, items)
+}
+
+func (c *cache) User(userID string) (film.Items, bool) {
+	v, ok := c.user.Get(userID)
+	if !ok {
+		return nil, false
+	}
+	if f, ok := v.(film.Items); ok {
+		return f, true
+	}
+	return nil, false
 }

@@ -20,6 +20,7 @@ type filmService interface {
 	All(ctx context.Context) (pfilm.Items, error)
 	Score(ctx context.Context, userID, url string, score pfilm.Score) (*pfilm.Item, error)
 	RemoveScore(ctx context.Context, userID, url string) (*pfilm.Item, error)
+	User(ctx context.Context, userID string) (pfilm.Items, error)
 }
 
 type jwtService interface {
@@ -51,6 +52,7 @@ func (h *handler) Run(port string) {
 	e.POST("/api/v1/films/new", h.new, h.jwt.Authorization)
 	e.GET("/api/v1/films/:id/get", h.get, h.jwt.Authorization)
 	e.GET("/api/v1/films/all", h.all, h.jwt.Authorization)
+	e.GET("/api/v1/films/my", h.my, h.jwt.Authorization)
 	e.PATCH("/api/v1/films/:id/score", h.score, h.jwt.Authorization)
 	e.PATCH("/api/v1/films/:id/unscore", h.removeScore, h.jwt.Authorization)
 
@@ -82,7 +84,7 @@ func (h *handler) new(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, &score))
+	return c.JSON(http.StatusOK, build(film, userID))
 }
 
 func (h *handler) get(c echo.Context) error {
@@ -100,13 +102,22 @@ func (h *handler) get(c echo.Context) error {
 	case err != nil:
 		return err
 	}
-	var score *int
-	if v, ok := film.Scores[userID]; userID != "" && ok {
-		vint := int(v)
-		score = &vint
+
+	return c.JSON(http.StatusOK, build(film, userID))
+}
+
+func (h *handler) my(c echo.Context) error {
+	userID, _ := h.jwt.ExtractUserID(c)
+
+	userFilms, err := h.film.User(c.Request().Context(), userID)
+	switch {
+	case errors.Is(err, films.ErrNotFound):
+		return c.String(http.StatusNotFound, "user not found")
+	case err != nil:
+		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, score))
+	return c.JSON(http.StatusOK, buildAll(userFilms, userID))
 }
 
 const (
@@ -139,22 +150,7 @@ func (h *handler) all(c echo.Context) error {
 		allFilms.SortAverage()
 	}
 
-	var resp AllFilmsResponse
-	resp.Films = make([]filmResponse, 0, len(allFilms))
-
-	for i := range allFilms {
-		var score *int
-		film := &allFilms[i]
-		if userID != "" {
-			if v, ok := film.Scores[userID]; ok {
-				vint := int(v)
-				score = &vint
-			}
-		}
-		resp.Films = append(resp.Films, *build(film, score))
-	}
-
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, buildAll(allFilms, userID))
 }
 
 func (h *handler) score(c echo.Context) error {
@@ -182,7 +178,7 @@ func (h *handler) score(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, &score))
+	return c.JSON(http.StatusOK, build(film, userID))
 }
 
 func (h *handler) removeScore(c echo.Context) error {
@@ -204,10 +200,16 @@ func (h *handler) removeScore(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, nil))
+	return c.JSON(http.StatusOK, build(film, ""))
 }
 
-func build(film *pfilm.Item, userScore *int) *filmResponse {
+func build(film *pfilm.Item, userID string) *filmResponse {
+	var score *int
+	if v, ok := film.Scores[userID]; userID != "" && ok {
+		vint := int(v)
+		score = &vint
+	}
+
 	scores := make(map[string]int, len(film.Scores))
 	for k, v := range film.Scores {
 		scores[k] = int(v)
@@ -222,7 +224,7 @@ func build(film *pfilm.Item, userScore *int) *filmResponse {
 		Director:        film.Director,
 		Description:     film.Description,
 		Duration:        film.Duration,
-		UserScore:       userScore,
+		UserScore:       score,
 		Scores:          scores,
 		URL:             film.URL,
 		RatingKinopoisk: film.RatingKinopoisk,
@@ -236,6 +238,15 @@ func build(film *pfilm.Item, userScore *int) *filmResponse {
 		ShortFilm:       film.ShortFilm,
 		Genres:          film.Genres,
 	}
+}
+
+func buildAll(all pfilm.Items, userID string) AllFilmsResponse {
+	var resp AllFilmsResponse
+	resp.Films = make([]filmResponse, 0, len(all))
+	for i := range all {
+		resp.Films = append(resp.Films, *build(&all[i], userID))
+	}
+	return resp
 }
 
 type filmResponse struct {

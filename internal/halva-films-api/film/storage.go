@@ -24,19 +24,21 @@ func NewStorage(client *firestore.Client) *storage {
 	}
 }
 
-func (s *storage) SetFilm(ctx context.Context, userID string, item *film.Item) error {
-	score, ok := item.Scores[userID]
+func (s *storage) Set(ctx context.Context, userID string, item *film.Item) error {
+	var (
+		score, ok = item.Scores[userID]
+		filmRef   = s.Collection(fire.FilmsCollection).Doc(item.ID)
+		userRef   = s.Collection(fire.UsersCollection).Doc(userID)
+	)
 
-	filmRef := s.Collection(fire.FilmsCollection).Doc(item.ID)
-	userRef := s.Collection(fire.UsersCollection).Doc(userID)
 	err := s.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		userDoc, err := tx.Get(userRef)
 		if err != nil {
 			return errors.Wrap(err, "get user doc")
 		}
 
-		var u user.Item
-		if err := userDoc.DataTo(&u); err != nil {
+		u, err := user.Parse(userDoc)
+		if err != nil {
 			return errors.Wrap(err, "parse user doc")
 		}
 
@@ -58,7 +60,7 @@ func (s *storage) SetFilm(ctx context.Context, userID string, item *film.Item) e
 	return errors.Wrap(err, "run set film transaction")
 }
 
-func (s *storage) AllFilms(ctx context.Context) (film.Items, error) {
+func (s *storage) All(ctx context.Context) (film.Items, error) {
 	films := make(film.Items, 0, approximateFilmsNumber)
 	iter := s.Collection(fire.FilmsCollection).Documents(ctx)
 	for {
@@ -69,20 +71,28 @@ func (s *storage) AllFilms(ctx context.Context) (film.Items, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "get next iterator")
 		}
-		f, err := parseFilm(doc)
+		f, err := film.Parse(doc)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "parse film doc")
 		}
 		films = append(films, *f)
 	}
 	return films, nil
 }
 
-func parseFilm(doc *firestore.DocumentSnapshot) (*film.Item, error) {
-	var f film.Item
-	if err := doc.DataTo(&f); err != nil {
-		return nil, errors.Wrap(err, "parse film doc")
+func (s *storage) User(ctx context.Context, userID string) ([]string, error) {
+	userDoc, err := s.Collection(fire.UsersCollection).Doc(userID).Get(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "get user")
 	}
-	f.ID = doc.Ref.ID
-	return &f, nil
+	u, err := user.Parse(userDoc)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse user doc")
+	}
+
+	films := make([]string, 0, len(u.Scores))
+	for k, _ := range u.Scores {
+		films = append(films, k)
+	}
+	return films, nil
 }

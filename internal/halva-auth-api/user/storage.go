@@ -36,9 +36,9 @@ func (s *storage) Upsert(ctx context.Context, new *user.Item) error {
 			return errors.Wrap(err, "get user doc")
 		}
 
-		old, err := parseUser(userDoc)
+		old, err := user.Parse(userDoc)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "parse user doc")
 		}
 		old.Username = new.Username
 		old.Avatar = new.Avatar
@@ -60,20 +60,11 @@ func (s *storage) All(ctx context.Context) (user.Items, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "get next iterator")
 		}
-		u, err := parseUser(doc)
+		u, err := user.Parse(doc)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "parse user doc")
 		}
 		users = append(users, *u)
 	}
 	return users, nil
-}
-
-func parseUser(doc *firestore.DocumentSnapshot) (*user.Item, error) {
-	var u user.Item
-	if err := doc.DataTo(&u); err != nil {
-		return nil, errors.Wrap(err, "parse user doc")
-	}
-	u.ID = doc.Ref.ID
-	return &u, nil
 }

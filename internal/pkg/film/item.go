@@ -2,6 +2,9 @@ package film
 
 import (
 	"time"
+
+	"cloud.google.com/go/firestore"
+	"github.com/pkg/errors"
 )
 
 type Score int8
@@ -46,4 +49,13 @@ type Comment struct {
 	UserID    string    `firestore:"user_id" json:"user_id"`
 	Text      string    `firestore:"text" json:"text"`
 	CreatedAt time.Time `firestore:"created_at" json:"created_at"`
+}
+
+func Parse(doc *firestore.DocumentSnapshot) (*Item, error) {
+	var f Item
+	if err := doc.DataTo(&f); err != nil {
+		return nil, errors.Wrap(err, "unmarshall data")
+	}
+	f.ID = doc.Ref.ID
+	return &f, nil
 }

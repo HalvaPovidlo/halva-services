@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/film"
 )
@@ -15,15 +17,18 @@ var (
 )
 
 type cacheService interface {
-	SetFilm(item *film.Item)
-	GetFilm(id string) (*film.Item, bool)
-	SetFilms(items film.Items)
-	AllFilms() film.Items
+	Set(item *film.Item)
+	Get(id string) (*film.Item, bool)
+	SetAll(items film.Items)
+	All() film.Items
+	User(userID string) (film.Items, bool)
+	SetUser(userID string, items film.Items)
 }
 
 type storageService interface {
-	SetFilm(ctx context.Context, userID string, item *film.Item) error
-	AllFilms(ctx context.Context) (film.Items, error)
+	Set(ctx context.Context, userID string, item *film.Item) error
+	All(ctx context.Context) (film.Items, error)
+	User(ctx context.Context, userID string) ([]string, error)
 }
 
 type kinopoisk interface {
@@ -47,7 +52,7 @@ func New(kinopoisk kinopoisk, cache cacheService, storage storageService) *servi
 
 func (s *service) New(ctx context.Context, userID, url string, score film.Score) (*film.Item, error) {
 	id := s.kinopoisk.ExtractID(url)
-	if _, ok := s.cache.GetFilm(id); ok {
+	if _, ok := s.cache.Get(id); ok {
 		return nil, ErrAlreadyExists
 	}
 
@@ -59,48 +64,41 @@ func (s *service) New(ctx context.Context, userID, url string, score film.Score)
 	f.Scores = make(map[string]film.Score, 10)
 	f.Scores[userID] = score
 
-	if err := s.storage.SetFilm(ctx, userID, f); err != nil {
+	if err := s.storage.Set(ctx, userID, f); err != nil {
 		return nil, errors.Wrap(err, "insert film in storage")
 	}
-	s.cache.SetFilm(f)
+	s.cache.Set(f)
 
 	return f, nil
 }
 
 func (s *service) Get(ctx context.Context, url string) (*film.Item, error) {
 	id := s.kinopoisk.ExtractID(url)
-	if f, ok := s.cache.GetFilm(id); ok {
+	if f, ok := s.cache.Get(id); ok {
 		return f, nil
 	}
-
-	// while cache is consistent
-	//f, err := s.storage.GetFilm(ctx, id)
-	//if err != nil {
-	//	return nil, errors.Wrap(err, "get film from storage")
-	//}
-	//s.cache.SetFilm(f)
 
 	return nil, ErrNotFound
 }
 
 func (s *service) All(ctx context.Context) (film.Items, error) {
-	cached := s.cache.AllFilms()
+	cached := s.cache.All()
 	if len(cached) != 0 {
 		return cached, nil
 	}
 
-	films, err := s.storage.AllFilms(ctx)
+	films, err := s.storage.All(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "get film from storage")
 	}
-	s.cache.SetFilms(films)
+	s.cache.SetAll(films)
 
 	return films, nil
 }
 
 func (s *service) Score(ctx context.Context, userID, url string, score film.Score) (*film.Item, error) {
 	id := s.kinopoisk.ExtractID(url)
-	cached, ok := s.cache.GetFilm(id)
+	cached, ok := s.cache.Get(id)
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -110,16 +108,16 @@ func (s *service) Score(ctx context.Context, userID, url string, score film.Scor
 	}
 	cached.Scores[userID] = score
 
-	if err := s.storage.SetFilm(ctx, userID, cached); err != nil {
+	if err := s.storage.Set(ctx, userID, cached); err != nil {
 		return nil, errors.Wrap(err, "insert film to storage")
 	}
-	s.cache.SetFilm(cached)
+	s.cache.Set(cached)
 	return cached, nil
 }
 
 func (s *service) RemoveScore(ctx context.Context, userID, url string) (*film.Item, error) {
 	id := s.kinopoisk.ExtractID(url)
-	cached, ok := s.cache.GetFilm(id)
+	cached, ok := s.cache.Get(id)
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -130,9 +128,34 @@ func (s *service) RemoveScore(ctx context.Context, userID, url string) (*film.It
 
 	delete(cached.Scores, userID)
 
-	if err := s.storage.SetFilm(ctx, userID, cached); err != nil {
+	if err := s.storage.Set(ctx, userID, cached); err != nil {
 		return nil, errors.Wrap(err, "insert film to storage")
 	}
-	s.cache.SetFilm(cached)
+	s.cache.Set(cached)
 	return cached, nil
+}
+
+func (s *service) User(ctx context.Context, userID string) (film.Items, error) {
+	cached, ok := s.cache.User(userID)
+	if ok {
+		return cached, nil
+	}
+
+	filmsID, err := s.storage.User(ctx, userID)
+	switch {
+	case status.Code(err) == codes.NotFound:
+		return nil, ErrNotFound
+	case err != nil:
+		return nil, errors.Wrap(err, "get user films id from storage")
+	}
+
+	userFilms := make(film.Items, 0, len(filmsID))
+	for i := range filmsID {
+		if f, err := s.Get(ctx, filmsID[i]); err == nil {
+			userFilms = append(userFilms, *f)
+		}
+	}
+
+	s.cache.SetUser(userID, userFilms)
+	return userFilms, nil
 }

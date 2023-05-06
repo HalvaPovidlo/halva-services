@@ -6,12 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 )
 
 const headerTraceID = "X_TRACE_ID"
@@ -37,8 +36,8 @@ func (s *service) RegisterHandlers(handlers ...Handler) {
 }
 
 func (s *service) Run(port string, log *zap.Logger) {
-	s.echo.Use(logger(log))
-	s.echo.Use(middleware.Recover())
+	s.echo.Use(loggerMiddleware(log))
+	s.echo.Use(recoverMiddleware())
 
 	go func() {
 		if err := s.echo.Start(":" + port); err != nil && err != http.ErrServerClosed {
@@ -53,7 +52,7 @@ func (s *service) Shutdown(ctx context.Context) error {
 	return s.echo.Shutdown(ctx)
 }
 
-func logger(log *zap.Logger) echo.MiddlewareFunc {
+func loggerMiddleware(log *zap.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			traceID := c.Request().Header.Get(headerTraceID)
@@ -100,6 +99,28 @@ func logger(log *zap.Logger) echo.MiddlewareFunc {
 			}
 
 			return nil
+		}
+	}
+}
+
+func recoverMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			logger := contexts.GetLogger(c.Request().Context())
+			defer func() {
+				if r := recover(); r != nil {
+					if r == http.ErrAbortHandler {
+						panic(r)
+					}
+					err, ok := r.(error)
+					if !ok {
+						err = fmt.Errorf("%v", r)
+					}
+					logger.Error("Panic during processing request", zap.Error(err))
+					c.Error(err)
+				}
+			}()
+			return next(c)
 		}
 	}
 }

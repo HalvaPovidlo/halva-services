@@ -101,7 +101,6 @@ func (h *handler) get(c echo.Context) error {
 
 func (h *handler) my(c echo.Context) error {
 	userID, _ := h.jwt.ExtractUserID(c)
-
 	userFilms, err := h.film.User(c.Request().Context(), userID)
 	switch {
 	case errors.Is(err, films.ErrNotFound):

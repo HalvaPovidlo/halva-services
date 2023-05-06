@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	precision       = 1000
 	publicPrecision = 10
 )
 
@@ -37,6 +36,17 @@ func (f Items) SortIMDB() {
 	})
 }
 
+func (f Items) SortScoreNumber() {
+	sort.Slice(f, func(i, j int) bool {
+		a := len(f[i].Scores)
+		b := len(f[j].Scores)
+		if a == b {
+			return f[i].Title < f[j].Title
+		}
+		return a < b
+	})
+}
+
 func (f *Item) Average() Rate {
 	var rate Rate
 	for _, v := range f.Scores {
@@ -48,8 +58,8 @@ func (f *Item) Average() Rate {
 
 func (f Items) SortAverage() {
 	sort.Slice(f, func(i, j int) bool {
-		a := f[i].Average().round()
-		b := f[j].Average().round()
+		a := f[i].Average()
+		b := f[j].Average()
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
@@ -67,8 +77,8 @@ func (f *Item) Sum() Rate {
 
 func (f Items) SortSum() {
 	sort.Slice(f, func(i, j int) bool {
-		a := f[i].Sum().round()
-		b := f[j].Sum().round()
+		a := f[i].Sum()
+		b := f[j].Sum()
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
@@ -83,8 +93,8 @@ func (f *Item) Halva() Rate {
 
 func (f Items) SortHalva() {
 	sort.Slice(f, func(i, j int) bool {
-		a := f[i].Halva().round()
-		b := f[j].Halva().round()
+		a := f[i].Halva()
+		b := f[j].Halva()
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
@@ -94,8 +104,4 @@ func (f Items) SortHalva() {
 
 func (r Rate) Round() Rate {
 	return Rate(math.Round(float64(r)*publicPrecision) / publicPrecision)
-}
-
-func (r Rate) round() Rate {
-	return Rate(math.Round(float64(r)*precision) / precision)
 }

@@ -13,6 +13,15 @@ import (
 	pfilm "github.com/HalvaPovidlo/halva-services/internal/pkg/film"
 )
 
+const (
+	SortRatingKinopoisk   = "kinopoisk"
+	SortRatingImdb        = "imdb"
+	SortRatingHalva       = "halva"
+	SortRatingSum         = "sum"
+	SortRatingAverage     = "average"
+	SortRatingScoreNumber = "score_number"
+)
+
 type filmService interface {
 	New(ctx context.Context, userID, url string, score pfilm.Score) (*pfilm.Item, error)
 	Get(ctx context.Context, url string) (*pfilm.Item, error)
@@ -41,7 +50,7 @@ func New(filmService filmService, jwtService jwtService) *handler {
 }
 
 func (h *handler) RegisterRoutes(e *echo.Echo) {
-	e.GET("/api/v1/public/films/get", h.get)
+	e.GET("/api/v1/public/films/:id/get", h.get)
 	e.GET("/api/v1/public/films/all", h.all)
 
 	e.POST("/api/v1/films/new", h.new, h.jwt.Authorization)
@@ -112,14 +121,6 @@ func (h *handler) my(c echo.Context) error {
 	return c.JSON(http.StatusOK, buildAll(userFilms, userID))
 }
 
-const (
-	SortRatingKinopoisk = "kinopoisk"
-	SortRatingImdb      = "imdb"
-	SortRatingHalva     = "halva"
-	SortRatingSum       = "sum"
-	SortRatingAverage   = "average"
-)
-
 func (h *handler) all(c echo.Context) error {
 	userID, _ := h.jwt.ExtractUserID(c)
 	sort := c.QueryParam("sort")
@@ -140,6 +141,8 @@ func (h *handler) all(c echo.Context) error {
 		allFilms.SortSum()
 	case SortRatingAverage:
 		allFilms.SortAverage()
+	case SortRatingScoreNumber:
+		allFilms.SortScoreNumber()
 	}
 
 	return c.JSON(http.StatusOK, buildAll(allFilms, userID))
@@ -176,7 +179,7 @@ func (h *handler) score(c echo.Context) error {
 func (h *handler) removeScore(c echo.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.String(http.StatusBadRequest, "url or score param is empty")
+		return c.String(http.StatusBadRequest, "id is empty")
 	}
 
 	userID, err := h.jwt.ExtractUserID(c)
@@ -188,6 +191,8 @@ func (h *handler) removeScore(c echo.Context) error {
 	switch {
 	case errors.Is(err, films.ErrNotFound):
 		return c.String(http.StatusNotFound, "Film not found")
+	case errors.Is(err, films.ErrNoScore):
+		return c.String(http.StatusNotFound, "Film has no score from you")
 	case err != nil:
 		return err
 	}

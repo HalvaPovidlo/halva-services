@@ -13,8 +13,6 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
-const headerTraceID = "X_TRACE_ID"
-
 type Handler interface {
 	RegisterRoutes(e *echo.Echo)
 }
@@ -55,10 +53,10 @@ func (s *service) Shutdown(ctx context.Context) error {
 func loggerMiddleware(log *zap.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			traceID := c.Request().Header.Get(headerTraceID)
+			traceID := c.Request().Header.Get(echo.HeaderXRequestID)
 			contexts.SetValuesEcho(c, log, traceID)
 			traceID = contexts.GetTraceID(c.Request().Context())
-			log.Info("Request caught", zap.String("trace_id", traceID))
+			log.Info("Request", zap.String("trace_id", traceID))
 
 			start := time.Now()
 			err := next(c)
@@ -79,12 +77,6 @@ func loggerMiddleware(log *zap.Logger) echo.MiddlewareFunc {
 				zap.Int64("size", res.Size),
 				zap.String("user_agent", req.UserAgent()),
 			}
-
-			id := req.Header.Get(echo.HeaderXRequestID)
-			if id == "" {
-				id = res.Header().Get(echo.HeaderXRequestID)
-			}
-			fields = append(fields, zap.String("request_id", id))
 
 			n := res.Status
 			switch {

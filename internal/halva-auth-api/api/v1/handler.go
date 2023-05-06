@@ -7,9 +7,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/auth"
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/user"
+	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
 const (
@@ -87,6 +89,8 @@ func (h *handler) callback(c echo.Context) error {
 	userID, username, avatar, err := h.auth.GetDiscordInfo(ctx, c.FormValue("code"), c.FormValue("state"), c.RealIP())
 	switch {
 	case errors.Is(err, auth.ErrUnknownUser):
+		contexts.GetLogger(ctx).Warn("Unknown discord user trying to connect!!!!!!!!!",
+			zap.String("id", userID), zap.String("username", username))
 		return c.String(http.StatusNotFound, "Unknown user, ask andrei.khodko@gmail.com to add")
 	case err != nil:
 		return err

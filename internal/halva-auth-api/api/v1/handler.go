@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/labstack/echo/v4"
+	"github.com/HalvaPovidlo/halva-services/internal/pkg/user"
 )
 
 const (
@@ -25,19 +26,26 @@ type loginService interface {
 	GetDiscordInfo(ctx context.Context, authCode, reqState, key string) (string, string, string, error)
 }
 
+type userService interface {
+	Upsert(ctx context.Context, id, username, avatar string) error
+	All(ctx context.Context) (user.Items, error)
+}
+
 type handler struct {
 	host     string
 	port     string
 	auth     loginService
 	jwt      jwtService
+	user     userService
 	tokenTTL time.Duration
 }
 
-func New(host, port string, login loginService, jwtService jwtService, tokenTTL time.Duration) *handler {
+func New(host, port string, login loginService, user userService, jwtService jwtService, tokenTTL time.Duration) *handler {
 	return &handler{
 		host:     host,
 		port:     port,
 		auth:     login,
+		user:     user,
 		jwt:      jwtService,
 		tokenTTL: tokenTTL,
 	}
@@ -49,7 +57,7 @@ func (h *handler) Run() {
 	e.Use(middleware.Recover())
 
 	e.GET("/api/v1/login", h.login)
-	e.GET("/api/v1/hello", h.hello, h.jwt.Authorization)
+	e.GET("/api/v1/users", h.users, h.jwt.Authorization)
 	e.GET(callbackPath, h.callback)
 
 	e.Logger.Fatal(e.Start(":" + h.port))
@@ -60,17 +68,37 @@ func (h *handler) login(c echo.Context) error {
 	return c.Redirect(http.StatusTemporaryRedirect, h.auth.RedirectURL(path, c.RealIP()))
 }
 
-func (h *handler) hello(c echo.Context) error {
-	return c.String(http.StatusOK, "Hello world!")
+func (h *handler) users(c echo.Context) error {
+	var users usersResponse
+	all, err := h.user.All(c.Request().Context())
+	if err != nil {
+		return err
+	}
+	users.Users = make([]userResponse, len(all))
+	for i := range all {
+		u := &all[i]
+		users.Users = append(users.Users, userResponse{
+			ID:       u.ID,
+			Username: u.Username,
+			Avatar:   u.Avatar,
+		})
+	}
+
+	return c.JSON(http.StatusOK, users)
 }
 
 func (h *handler) callback(c echo.Context) error {
-	userID, username, avatar, err := h.auth.GetDiscordInfo(c.Request().Context(), c.FormValue("code"), c.FormValue("state"), c.RealIP())
+	ctx := c.Request().Context()
+	userID, username, avatar, err := h.auth.GetDiscordInfo(ctx, c.FormValue("code"), c.FormValue("state"), c.RealIP())
 	if err != nil {
 		return err
 	}
 	token, err := h.jwt.Generate(userID)
 	if err != nil {
+		return err
+	}
+
+	if err := h.user.Upsert(ctx, userID, username, avatar); err != nil {
 		return err
 	}
 
@@ -88,4 +116,14 @@ type loginResponse struct {
 	Username   string    `json:"username"`
 	Avatar     string    `json:"avatar"`
 	Expiration time.Time `json:"expiration"`
+}
+
+type userResponse struct {
+	ID       string `json:"id,omitempty"`
+	Username string `json:"username,omitempty"`
+	Avatar   string `json:"avatar,omitempty"`
+}
+
+type usersResponse struct {
+	Users []userResponse `json:"users"`
 }

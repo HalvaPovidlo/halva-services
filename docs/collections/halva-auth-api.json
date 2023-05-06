@@ -29,24 +29,16 @@
 			},
 			"response": [
 				{
-					"id": "6c4c21dc-87b6-40fd-9926-23fac4a824e5",
+					"id": "4d48bfe2-c2a7-4375-af5d-26f8beb270d9",
 					"name": "users",
 					"originalRequest": {
 						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiIzMjAzMDk1MTI2OTc0MTM2MzMiLCJleHAiOjE2ODM0NjM2OTF9.cPSawn22XmEKrl2v9lZ0MhSYF0yZ7Jhje6bZzB_3bsQ",
-								"type": "text"
-							}
-						],
+						"header": [],
 						"url": {
-							"raw": "http://localhost:9090/api/v1/users",
-							"protocol": "http",
+							"raw": "{{host_auth}}/api/v1/users",
 							"host": [
-								"localhost"
+								"{{host_auth}}"
 							],
-							"port": "9090",
 							"path": [
 								"api",
 								"v1",
@@ -64,7 +56,7 @@
 						},
 						{
 							"key": "Date",
-							"value": "Sat, 06 May 2023 09:36:47 GMT"
+							"value": "Sat, 06 May 2023 16:35:10 GMT"
 						},
 						{
 							"key": "Content-Length",
@@ -72,7 +64,7 @@
 						}
 					],
 					"cookie": [],
-					"body": "{\n    \"users\": [\n        {\n            \"id\": \"320310971593916416\",\n            \"username\": \"AU\"\n        },\n        {\n            \"id\": \"320311179245256706\",\n            \"username\": \"Shtany?\"\n        },\n        {\n            \"id\": \"339482443943772160\",\n            \"username\": \"Oh no\"\n        },\n        {\n            \"id\": \"233195670125805568\",\n            \"username\": \"felloy\"\n        },\n        {\n            \"id\": \"644504316576530438\",\n            \"username\": \"weq\"\n        },\n        {\n            \"id\": \"242030987536629760\",\n            \"username\": \"w8nvm\"\n        },\n        {\n            \"id\": \"257456911270674433\",\n            \"username\": \"fluX\"\n        },\n        {\n            \"id\": \"397466273157480448\",\n            \"username\": \"Атлант(Лобстер)\"\n        },\n        {\n            \"id\": \"407858784354959361\",\n            \"username\": \"shueppsh\"\n        },\n        {\n            \"id\": \"320309512697413633\",\n            \"username\": \"khodand\",\n            \"avatar\": \"https://cdn.discordapp.com/avatars/320309512697413633/45a634a8f670543b49e2d09a8580a4a9\"\n        }\n    ]\n}"
+					"body": "{\n    \"users\": [\n        {\n            \"id\": \"644504316576530438\",\n            \"username\": \"weq\"\n        },\n        {\n            \"id\": \"257456911270674433\",\n            \"username\": \"fluX\"\n        },\n        {\n            \"id\": \"320310971593916416\",\n            \"username\": \"AU\"\n        },\n        {\n            \"id\": \"339482443943772160\",\n            \"username\": \"Oh no\"\n        },\n        {\n            \"id\": \"407858784354959361\",\n            \"username\": \"shueppsh\"\n        },\n        {\n            \"id\": \"242030987536629760\",\n            \"username\": \"w8nvm\"\n        },\n        {\n            \"id\": \"320311179245256706\",\n            \"username\": \"Shtany?\"\n        },\n        {\n            \"id\": \"320309512697413633\",\n            \"username\": \"khodand\",\n            \"avatar\": \"https://cdn.discordapp.com/avatars/320309512697413633/45a634a8f670543b49e2d09a8580a4a9\"\n        },\n        {\n            \"id\": \"397466273157480448\",\n            \"username\": \"Атлант(Лобстер)\"\n        },\n        {\n            \"id\": \"233195670125805568\",\n            \"username\": \"felloy\"\n        }\n    ]\n}"
 				}
 			]
 		},
@@ -100,54 +92,7 @@
 					]
 				}
 			},
-			"response": [
-				{
-					"id": "faeffb70-171a-4983-8999-46fba4e58d76",
-					"name": "users",
-					"originalRequest": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiIzMjAzMDk1MTI2OTc0MTM2MzMiLCJleHAiOjE2ODM0NjM2OTF9.cPSawn22XmEKrl2v9lZ0MhSYF0yZ7Jhje6bZzB_3bsQ",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "http://localhost:9090/api/v1/users",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "9090",
-							"path": [
-								"api",
-								"v1",
-								"users"
-							]
-						}
-					},
-					"status": "OK",
-					"code": 200,
-					"_postman_previewlanguage": "json",
-					"header": [
-						{
-							"key": "Content-Type",
-							"value": "application/json; charset=UTF-8"
-						},
-						{
-							"key": "Date",
-							"value": "Sat, 06 May 2023 09:36:47 GMT"
-						},
-						{
-							"key": "Content-Length",
-							"value": "605"
-						}
-					],
-					"cookie": [],
-					"body": "{\n    \"users\": [\n        {\n            \"id\": \"320310971593916416\",\n            \"username\": \"AU\"\n        },\n        {\n            \"id\": \"320311179245256706\",\n            \"username\": \"Shtany?\"\n        },\n        {\n            \"id\": \"339482443943772160\",\n            \"username\": \"Oh no\"\n        },\n        {\n            \"id\": \"233195670125805568\",\n            \"username\": \"felloy\"\n        },\n        {\n            \"id\": \"644504316576530438\",\n            \"username\": \"weq\"\n        },\n        {\n            \"id\": \"242030987536629760\",\n            \"username\": \"w8nvm\"\n        },\n        {\n            \"id\": \"257456911270674433\",\n            \"username\": \"fluX\"\n        },\n        {\n            \"id\": \"397466273157480448\",\n            \"username\": \"Атлант(Лобстер)\"\n        },\n        {\n            \"id\": \"407858784354959361\",\n            \"username\": \"shueppsh\"\n        },\n        {\n            \"id\": \"320309512697413633\",\n            \"username\": \"khodand\",\n            \"avatar\": \"https://cdn.discordapp.com/avatars/320309512697413633/45a634a8f670543b49e2d09a8580a4a9\"\n        }\n    ]\n}"
-				}
-			]
+			"response": []
 		}
 	],
 	"auth": {

@@ -50,6 +50,11 @@ func New(kinopoisk kinopoisk, cache cacheService, storage storageService) *servi
 	}
 }
 
+func (s *service) FillCache(ctx context.Context) error {
+	_, err := s.All(ctx)
+	return err
+}
+
 func (s *service) New(ctx context.Context, userID, url string, score film.Score) (*film.Item, error) {
 	id := s.kinopoisk.ExtractID(url)
 	if _, ok := s.cache.Get(id); ok {

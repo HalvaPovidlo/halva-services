@@ -74,7 +74,7 @@ func (h *handler) users(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	users.Users = make([]userResponse, len(all))
+	users.Users = make([]userResponse, 0, len(all))
 	for i := range all {
 		u := &all[i]
 		users.Users = append(users.Users, userResponse{
@@ -98,6 +98,7 @@ func (h *handler) callback(c echo.Context) error {
 		return err
 	}
 
+	avatar = discordAvatarURL + userID + "/" + avatar
 	if err := h.user.Upsert(ctx, userID, username, avatar); err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func (h *handler) callback(c echo.Context) error {
 	resp := loginResponse{
 		Token:      token,
 		Username:   username,
-		Avatar:     discordAvatarURL + userID + "/" + avatar,
+		Avatar:     avatar,
 		Expiration: time.Now().Add(h.tokenTTL),
 	}
 	return c.JSON(http.StatusOK, resp)
@@ -125,5 +126,5 @@ type userResponse struct {
 }
 
 type usersResponse struct {
-	Users []userResponse `json:"users"`
+	Users []userResponse `json:"users,omitempty"`
 }

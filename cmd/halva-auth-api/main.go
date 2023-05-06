@@ -30,6 +30,10 @@ func main() {
 	}
 
 	userService := user.New(user.NewCache(cache.NoExpiration, cache.NoExpiration), user.NewStorage(fireClient))
+	err = userService.FillCache(context.Background())
+	if err != nil {
+		panic(err)
+	}
 
 	jwtService := jwt.New(cfg.General.Secret, ttl)
 	authService := auth.New(cfg.Login)

@@ -34,6 +34,10 @@ func main() {
 		film.NewCache(cache.NoExpiration, cache.NoExpiration),
 		film.NewStorage(fireClient),
 	)
+	err = filmService.FillCache(context.Background())
+	if err != nil {
+		panic(err)
+	}
 
 	jwtService := jwt.New(cfg.General.Secret, ttl)
 	handler := apiv1.New(filmService, jwtService)

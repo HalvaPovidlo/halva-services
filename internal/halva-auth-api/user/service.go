@@ -35,6 +35,11 @@ func New(cache cacheService, storage storageService) *service {
 	}
 }
 
+func (s *service) FillCache(ctx context.Context) error {
+	_, err := s.All(ctx)
+	return err
+}
+
 func (s *service) Upsert(ctx context.Context, id, username, avatar string) error {
 	u := &user.Item{
 		ID:       id,

@@ -48,6 +48,9 @@ func (f Items) SortScoreNumber() {
 }
 
 func (f *Item) Average() Rate {
+	if len(f.Scores) == 0 {
+		return 0
+	}
 	var rate Rate
 	for _, v := range f.Scores {
 		rate += Rate(v)

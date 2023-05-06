@@ -256,7 +256,7 @@ type filmResponse struct {
 	Description     string         `json:"description,omitempty"`
 	Duration        string         `json:"duration,omitempty"`
 	UserScore       *int           `json:"user_score,omitempty"`
-	Scores          map[string]int `json:"scores"`
+	Scores          map[string]int `json:"scores,omitempty"`
 	URL             string         `json:"kinopoisk,omitempty"`
 	RatingKinopoisk float64        `json:"rating_kinopoisk"`
 	RatingImdb      float64        `json:"rating_imdb"`

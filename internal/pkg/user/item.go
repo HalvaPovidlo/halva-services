@@ -2,6 +2,8 @@ package user
 
 import "github.com/HalvaPovidlo/halva-services/internal/pkg/film"
 
+type Items []Item
+
 type Item struct {
 	ID       string                `firestore:"-" json:"id"`
 	Username string                `firestore:"username" json:"username,omitempty"`

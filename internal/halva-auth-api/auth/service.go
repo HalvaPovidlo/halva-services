@@ -79,7 +79,7 @@ func (s *service) GetDiscordInfo(ctx context.Context, authCode, reqState, key st
 		return "", "", "", errors.Wrap(err, "unmarshal response body")
 	}
 
-	return discordUser.Id, discordUser.Username, discordUser.Avatar, errors.Wrap(err, "generate jwt token")
+	return discordUser.ID, discordUser.Username, discordUser.Avatar, errors.Wrap(err, "generate jwt token")
 }
 
 func generateState(key string) string {
@@ -89,19 +89,7 @@ func generateState(key string) string {
 }
 
 type discordOAuthResp struct {
-	Id               string      `json:"id"`
-	Username         string      `json:"username"`
-	GlobalName       interface{} `json:"global_name"`
-	DisplayName      interface{} `json:"display_name"`
-	Avatar           string      `json:"avatar"`
-	Discriminator    string      `json:"discriminator"`
-	PublicFlags      int         `json:"public_flags"`
-	Flags            int         `json:"flags"`
-	Banner           interface{} `json:"banner"`
-	BannerColor      interface{} `json:"banner_color"`
-	AccentColor      interface{} `json:"accent_color"`
-	Locale           string      `json:"locale"`
-	MfaEnabled       bool        `json:"mfa_enabled"`
-	PremiumType      int         `json:"premium_type"`
-	AvatarDecoration interface{} `json:"avatar_decoration"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Avatar   string `json:"avatar"`
 }

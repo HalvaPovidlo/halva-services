@@ -2,16 +2,22 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/cmd/halva-films-api/config"
 	apiv1 "github.com/HalvaPovidlo/halva-services/internal/halva-films-api/api/v1"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-films-api/film"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-films-api/kinopoisk"
+	"github.com/HalvaPovidlo/halva-services/pkg/echos"
 	"github.com/HalvaPovidlo/halva-services/pkg/firestore"
 	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
+	"github.com/HalvaPovidlo/halva-services/pkg/log"
 )
 
 var ttl = time.Hour * 48
@@ -23,10 +29,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	logger := log.NewLogger(cfg.General.Debug)
 
 	fireClient, err := firestore.New(context.Background(), "halvabot-firebase.json")
 	if err != nil {
-		panic(err)
+		logger.Fatal("failed to init firestore client", zap.Error(err))
 	}
 
 	filmService := film.New(
@@ -36,10 +43,28 @@ func main() {
 	)
 	err = filmService.FillCache(context.Background())
 	if err != nil {
-		panic(err)
+		logger.Fatal("failed to fill film service cache", zap.Error(err))
 	}
 
 	jwtService := jwt.New(cfg.General.Secret, ttl)
 	handler := apiv1.New(filmService, jwtService)
-	handler.Run(cfg.General.Port)
+
+	echoServer := echos.New()
+	echoServer.RegisterHandlers(handler)
+	echoServer.Run(cfg.General.Port, logger)
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	logger.Info("application started")
+
+	<-stop
+	logger.Info("signal received, stopping gracefully")
+	signal.Stop(stop)
+	close(stop)
+
+	if err := echoServer.Shutdown(context.Background()); err != nil {
+		logger.Error("failed echo server shutdown", zap.Error(err))
+	}
+	logger.Info("stopped")
+
 }

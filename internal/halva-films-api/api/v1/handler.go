@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
 
 	films "github.com/HalvaPovidlo/halva-services/internal/halva-films-api/film"
@@ -41,11 +40,7 @@ func New(filmService filmService, jwtService jwtService) *handler {
 	}
 }
 
-func (h *handler) Run(port string) {
-	e := echo.New()
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-
+func (h *handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/public/films/get", h.get)
 	e.GET("/api/v1/public/films/all", h.all)
 
@@ -55,8 +50,6 @@ func (h *handler) Run(port string) {
 	e.GET("/api/v1/films/my", h.my, h.jwt.Authorization)
 	e.PATCH("/api/v1/films/:id/score", h.score, h.jwt.Authorization)
 	e.PATCH("/api/v1/films/:id/unscore", h.removeScore, h.jwt.Authorization)
-
-	e.Logger.Fatal(e.Start(":" + port))
 }
 
 func (h *handler) new(c echo.Context) error {

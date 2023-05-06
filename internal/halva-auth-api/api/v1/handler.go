@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/auth"
@@ -53,16 +52,10 @@ func New(host, port string, login loginService, user userService, jwtService jwt
 	}
 }
 
-func (h *handler) Run() {
-	e := echo.New()
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-
+func (h *handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/login", h.login)
 	e.GET("/api/v1/users", h.users, h.jwt.Authorization)
 	e.GET(callbackPath, h.callback)
-
-	e.Logger.Fatal(e.Start(":" + h.port))
 }
 
 func (h *handler) login(c echo.Context) error {

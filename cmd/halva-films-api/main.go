@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
@@ -19,8 +18,6 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
 	"github.com/HalvaPovidlo/halva-services/pkg/log"
 )
-
-var ttl = time.Hour * 48
 
 const configPath = "cmd/halva-films-api/config/secret.yaml"
 
@@ -46,7 +43,7 @@ func main() {
 		logger.Fatal("failed to fill film service cache", zap.Error(err))
 	}
 
-	jwtService := jwt.New(cfg.General.Secret, ttl)
+	jwtService := jwt.New(cfg.General.Secret)
 	handler := apiv1.New(filmService, jwtService)
 
 	echoServer := echos.New()

@@ -14,6 +14,8 @@ const (
 	userIDClaim = "userID_jwt"
 )
 
+var TokenTTL = time.Minute * 60
+
 type Claims struct {
 	UserID string `json:"userID"`
 	jwt.RegisteredClaims
@@ -21,14 +23,12 @@ type Claims struct {
 
 type service struct {
 	secret        []byte
-	ttl           time.Duration
 	signingMethod jwt.SigningMethod
 }
 
-func New(secret string, ttl time.Duration) *service {
+func New(secret string) *service {
 	return &service{
 		secret:        []byte(secret),
-		ttl:           ttl,
 		signingMethod: jwt.SigningMethodHS256,
 	}
 }
@@ -37,7 +37,7 @@ func (s *service) Generate(userID string) (string, error) {
 	token := jwt.NewWithClaims(s.signingMethod, &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.ttl)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenTTL)),
 		},
 	})
 

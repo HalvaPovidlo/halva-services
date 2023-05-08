@@ -12,6 +12,7 @@ import (
 	"github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/auth"
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/user"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
+	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
 )
 
 const (
@@ -22,11 +23,16 @@ const (
 type jwtService interface {
 	Generate(userID string) (string, error)
 	Authorization(next echo.HandlerFunc) echo.HandlerFunc
+	ExtractUserID(c echo.Context) (string, error)
 }
 
 type loginService interface {
 	RedirectURL(redirectURL, key string) string
 	GetDiscordInfo(ctx context.Context, authCode, reqState, key string) (string, string, string, error)
+	GenerateRefreshToken(userID string) string
+	ValidateRefreshToken(userID, token string) (string, error)
+	ExpireRefreshToken(token string)
+	ExpireAllRefreshTokens(userID string)
 }
 
 type userService interface {
@@ -35,27 +41,27 @@ type userService interface {
 }
 
 type handler struct {
-	host     string
-	port     string
-	auth     loginService
-	jwt      jwtService
-	user     userService
-	tokenTTL time.Duration
+	host string
+	port string
+	auth loginService
+	jwt  jwtService
+	user userService
 }
 
-func New(host, port string, login loginService, user userService, jwtService jwtService, tokenTTL time.Duration) *handler {
+func New(host, port string, login loginService, user userService, jwtService jwtService) *handler {
 	return &handler{
-		host:     host,
-		port:     port,
-		auth:     login,
-		user:     user,
-		jwt:      jwtService,
-		tokenTTL: tokenTTL,
+		host: host,
+		port: port,
+		auth: login,
+		user: user,
+		jwt:  jwtService,
 	}
 }
 
 func (h *handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/login", h.login)
+	e.POST("/api/v1/refresh", h.refresh, h.jwt.Authorization)
+	e.POST("/api/v1/logout", h.logout, h.jwt.Authorization)
 	e.GET("/api/v1/users", h.users, h.jwt.Authorization)
 	e.GET(callbackPath, h.callback)
 }
@@ -63,6 +69,59 @@ func (h *handler) RegisterRoutes(e *echo.Echo) {
 func (h *handler) login(c echo.Context) error {
 	path := h.host + ":" + h.port + callbackPath
 	return c.Redirect(http.StatusTemporaryRedirect, h.auth.RedirectURL(path, c.RealIP()))
+}
+
+func (h *handler) logout(c echo.Context) error {
+	userID, err := h.jwt.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	refresh := c.QueryParam("refresh")
+	if refresh == "" {
+		return c.String(http.StatusBadRequest, "Refresh token is empty")
+	}
+
+	all := c.QueryParam("all")
+	if all == "true" {
+		h.auth.ExpireAllRefreshTokens(userID)
+	} else {
+		h.auth.ExpireRefreshToken(refresh)
+	}
+
+	return c.String(http.StatusOK, "You were successfully logged out")
+}
+
+func (h *handler) refresh(c echo.Context) error {
+	userID, err := h.jwt.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	refresh := c.QueryParam("refresh")
+	if refresh == "" {
+		return c.String(http.StatusBadRequest, "Refresh token is empty")
+	}
+
+	newToken, err := h.auth.ValidateRefreshToken(userID, refresh)
+	switch {
+	case errors.Is(err, auth.ErrInvalidToken):
+		return c.String(http.StatusUnprocessableEntity, "Invalid refresh token")
+	case err != nil:
+		return err
+	}
+
+	accessToken, err := h.jwt.Generate(userID)
+	if err != nil {
+		return err
+	}
+
+	resp := loginResponse{
+		Token:        accessToken,
+		Expiration:   time.Now().Add(jwt.TokenTTL),
+		RefreshToken: newToken,
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *handler) users(c echo.Context) error {
@@ -96,7 +155,7 @@ func (h *handler) callback(c echo.Context) error {
 		return err
 	}
 
-	token, err := h.jwt.Generate(userID)
+	accessToken, err := h.jwt.Generate(userID)
 	if err != nil {
 		return err
 	}
@@ -107,19 +166,21 @@ func (h *handler) callback(c echo.Context) error {
 	}
 
 	resp := loginResponse{
-		Token:      token,
-		Username:   username,
-		Avatar:     avatar,
-		Expiration: time.Now().Add(h.tokenTTL),
+		Token:        accessToken,
+		Username:     username,
+		Avatar:       avatar,
+		Expiration:   time.Now().Add(jwt.TokenTTL),
+		RefreshToken: h.auth.GenerateRefreshToken(userID),
 	}
 	return c.JSON(http.StatusOK, resp)
 }
 
 type loginResponse struct {
-	Token      string    `json:"token"`
-	Username   string    `json:"username"`
-	Avatar     string    `json:"avatar"`
-	Expiration time.Time `json:"expiration"`
+	Token        string    `json:"token"`
+	Expiration   time.Time `json:"expiration"`
+	RefreshToken string    `json:"refresh_token"`
+	Username     string    `json:"username,omitempty"`
+	Avatar       string    `json:"avatar,omitempty"`
 }
 
 type userResponse struct {

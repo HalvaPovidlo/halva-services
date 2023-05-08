@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
@@ -19,8 +18,6 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
 	"github.com/HalvaPovidlo/halva-services/pkg/log"
 )
-
-var ttl = time.Hour * 48
 
 const configPath = "cmd/halva-auth-api/config/secret.yaml"
 
@@ -42,9 +39,9 @@ func main() {
 		logger.Fatal("failed to fill user service cache", zap.Error(err))
 	}
 
-	jwtService := jwt.New(cfg.General.Secret, ttl)
+	jwtService := jwt.New(cfg.General.Secret)
 	authService := auth.New(cfg.Login)
-	handler := apiv1.New(cfg.General.Host, cfg.General.Port, authService, userService, jwtService, ttl)
+	handler := apiv1.New(cfg.General.Host, cfg.General.Port, authService, userService, jwtService)
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)

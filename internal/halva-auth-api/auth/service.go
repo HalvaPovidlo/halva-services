@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sync"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
@@ -26,8 +28,9 @@ var knownUsers = map[string]struct{}{
 }
 
 var (
-	ErrBadState    = errors.New("state does not match")
-	ErrUnknownUser = errors.New("user unknown")
+	ErrBadState     = errors.New("state does not match")
+	ErrInvalidToken = errors.New("refresh token is invalid")
+	ErrUnknownUser  = errors.New("user unknown")
 )
 
 const (
@@ -43,7 +46,9 @@ type Config struct {
 }
 
 type service struct {
-	oauth *oauth2.Config
+	oauth   *oauth2.Config
+	refresh map[string]string // token -> id
+	mx      *sync.RWMutex
 }
 
 func New(cfg Config) *service {
@@ -58,6 +63,8 @@ func New(cfg Config) *service {
 				AuthStyle: oauth2.AuthStyleInParams,
 			},
 		},
+		refresh: make(map[string]string, len(knownUsers)*3),
+		mx:      &sync.RWMutex{},
 	}
 }
 
@@ -73,7 +80,7 @@ func (s *service) GetDiscordInfo(ctx context.Context, authCode, reqState, key st
 	}
 	token, err := s.oauth.Exchange(ctx, authCode)
 	if err != nil {
-		return "", "", "", errors.Wrap(err, "exchange auth code to discord token")
+		return "", "", "", errors.Wrap(err, "exchange auth code for discord token")
 	}
 
 	res, err := s.oauth.Client(context.Background(), token).Get("https://discord.com/api/users/@me")
@@ -100,6 +107,48 @@ func (s *service) GetDiscordInfo(ctx context.Context, authCode, reqState, key st
 	}
 
 	return discordUser.ID, discordUser.Username, discordUser.Avatar, nil
+}
+
+func (s *service) GenerateRefreshToken(userID string) string {
+	token := uuid.New().String()
+	s.mx.Lock()
+	s.refresh[token] = userID
+	s.mx.Unlock()
+	return token
+}
+
+func (s *service) ExpireRefreshToken(token string) {
+	s.mx.Lock()
+	delete(s.refresh, token)
+	s.mx.Unlock()
+}
+
+func (s *service) ExpireAllRefreshTokens(userID string) {
+	toDelete := make([]string, 0, len(s.refresh))
+
+	s.mx.RLock()
+	for token, id := range s.refresh {
+		if id == userID {
+			toDelete = append(toDelete, token)
+		}
+	}
+	s.mx.RUnlock()
+
+	for i := range toDelete {
+		s.ExpireRefreshToken(toDelete[i])
+	}
+}
+
+func (s *service) ValidateRefreshToken(userID, token string) (string, error) {
+	s.mx.RLock()
+	id, ok := s.refresh[token]
+	s.mx.RUnlock()
+	if !ok || id != userID {
+		return "", ErrInvalidToken
+	}
+
+	s.ExpireRefreshToken(token)
+	return s.GenerateRefreshToken(userID), nil
 }
 
 func generateState(key string) string {

@@ -35,10 +35,12 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{host_auth}}/api/v1/users",
+							"raw": "http://localhost:9090/api/v1/users",
+							"protocol": "http",
 							"host": [
-								"{{host_auth}}"
+								"localhost"
 							],
+							"port": "9090",
 							"path": [
 								"api",
 								"v1",
@@ -92,7 +94,195 @@
 					]
 				}
 			},
+			"response": [
+				{
+					"id": "b690002b-5ba5-44dd-bf0b-b842c9ad6ea2",
+					"name": "login",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{host_auth}}/api/v1/login",
+							"host": [
+								"{{host_auth}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"login"
+							]
+						}
+					},
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"name": "Content-Type",
+							"value": "application/json",
+							"description": "",
+							"type": "text"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiIzMjAzMDk1MTI2OTc0MTM2MzMiLCJleHAiOjE2ODM1MzEyMjV9.qbOMJc98KDxgJ9v4flx3ArUqCGHDiUYSWeppa9wEBWg\",\n  \"expiration\": \"2023-05-08T10:33:45.919773+03:00\",\n  \"refresh_token\": \"47f1f651-a123-4d59-ab38-4b4dbbcf974d\",\n  \"username\": \"khodand\",\n  \"avatar\": \"https://cdn.discordapp.com/avatars/320309512697413633/45a634a8f670543b49e2d09a8580a4a9\"\n}"
+				}
+			]
+		},
+		{
+			"name": "logout",
+			"id": "95a65bb7-87bb-4ce3-8880-9eabf528e667",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{host_auth}}/api/v1/logout?refresh=47f1f651-a123-4d59-ab38-4b4dbbcf974d&all=false",
+					"host": [
+						"{{host_auth}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"logout"
+					],
+					"query": [
+						{
+							"key": "refresh",
+							"value": "47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+							"description": "Обязательный параметр"
+						},
+						{
+							"key": "all",
+							"value": "false",
+							"description": "Разлогиниться со всех устройств (true, false) По умолчанию false"
+						}
+					]
+				}
+			},
 			"response": []
+		},
+		{
+			"name": "refresh",
+			"id": "cfcb10be-2461-4793-b0e3-b0612574cfc9",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{host_auth}}/api/v1/refresh?refresh=47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+					"host": [
+						"{{host_auth}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"refresh"
+					],
+					"query": [
+						{
+							"key": "refresh",
+							"value": "47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+							"description": "Обязательный параметр"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"id": "4ca9ffd7-782e-4428-8457-4886f4aaf565",
+					"name": "refresh",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{host_auth}}/api/v1/refresh?refresh=47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+							"host": [
+								"{{host_auth}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"refresh"
+							],
+							"query": [
+								{
+									"key": "refresh",
+									"value": "47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+									"description": "Обязательный параметр"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=UTF-8"
+						},
+						{
+							"key": "Date",
+							"value": "Mon, 08 May 2023 06:35:10 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "261"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiIzMjAzMDk1MTI2OTc0MTM2MzMiLCJleHAiOjE2ODM1MzEzMTB9.q266bSw3_50hqZeiAV8ZmIfwkUoOaz_NUTyyAO167rc\",\n    \"expiration\": \"2023-05-08T10:35:10.624185+03:00\",\n    \"refresh_token\": \"4f34636f-f1d6-447b-bfbd-ee8d50a043e6\"\n}"
+				},
+				{
+					"id": "774f4c0c-0409-470f-9eb1-760decaf8177",
+					"name": "invalid token",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{host_auth}}/api/v1/refresh?refresh=47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+							"host": [
+								"{{host_auth}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"refresh"
+							],
+							"query": [
+								{
+									"key": "refresh",
+									"value": "47f1f651-a123-4d59-ab38-4b4dbbcf974d",
+									"description": "Обязательный параметр"
+								}
+							]
+						}
+					},
+					"status": "Unprocessable Entity",
+					"code": 422,
+					"_postman_previewlanguage": "plain",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "text/plain; charset=UTF-8"
+						},
+						{
+							"key": "Date",
+							"value": "Mon, 08 May 2023 06:35:45 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "21"
+						}
+					],
+					"cookie": [],
+					"body": "Invalid refresh token"
+				}
+			]
 		}
 	],
 	"auth": {

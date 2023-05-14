@@ -25,6 +25,7 @@ type Item struct {
 	Cover                    string           `firestore:"poster,omitempty" json:"poster,omitempty"`
 	Director                 string           `firestore:"director,omitempty" json:"director,omitempty"`
 	Description              string           `firestore:"description,omitempty" json:"description,omitempty"`
+	ShortDescription         string           `firestore:"short_description,omitempty" json:"short_description,omitempty"`
 	Duration                 string           `firestore:"duration,omitempty" json:"duration,omitempty"`
 	Scores                   map[string]Score `firestore:"scores" json:"scores,omitempty"`
 	Comments                 []Comment        `firestore:"-" json:"comments,omitempty"`

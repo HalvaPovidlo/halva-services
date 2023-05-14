@@ -18,7 +18,7 @@ const (
 	apiFilms              = "https://kinopoiskapiunofficial.tech/api/v2.2/films/"
 	apiStaff              = "https://kinopoiskapiunofficial.tech/api/v1/staff"
 	xAPIKeyHeader         = "X-API-KEY"
-	DirectorProfessionKey = "DIRECTOR"
+	ProfessionKeyDirector = "DIRECTOR"
 )
 
 type kinopoisk struct {
@@ -74,7 +74,6 @@ func (k *kinopoisk) getFilm(ctx context.Context, id string) (*filmResp, error) {
 	return &kp, nil
 }
 
-// https://kinopoiskapiunofficial.tech/api/v1/staff?filmId=1209850
 func (k *kinopoisk) getDirectors(ctx context.Context, id string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiStaff, nil)
 	if err != nil {
@@ -104,7 +103,7 @@ func (k *kinopoisk) getDirectors(ctx context.Context, id string) (string, error)
 
 	directors := make([]string, 0, len(staff))
 	for i := range staff {
-		if staff[i].ProfessionKey == DirectorProfessionKey {
+		if staff[i].ProfessionKey == ProfessionKeyDirector {
 			if staff[i].NameRu != "" {
 				directors = append(directors, staff[i].NameRu)
 			} else {
@@ -128,6 +127,7 @@ func (k *kinopoisk) buildFilm(kf *filmResp) *film.Item {
 		Poster:                   kf.PosterURL,
 		Cover:                    kf.CoverURL,
 		Description:              kf.Description,
+		ShortDescription:         kf.ShortDescription,
 		URL:                      kf.WebURL,
 		RatingKinopoisk:          kf.RatingKinopoisk,
 		RatingKinopoiskVoteCount: kf.RatingKinopoiskVoteCount,
@@ -220,6 +220,7 @@ type filmResp struct {
 	Year                     int     `json:"year"`
 	FilmLength               int     `json:"filmLength"`
 	Description              string  `json:"description"`
+	ShortDescription         string  `json:"shortDescription"`
 	Genres                   []genre `json:"genres"`
 	Serial                   bool    `json:"serial"`
 	ShortFilm                bool    `json:"shortFilm"`

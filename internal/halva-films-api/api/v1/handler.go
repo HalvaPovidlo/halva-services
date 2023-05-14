@@ -213,27 +213,28 @@ func build(film *pfilm.Item, userID string) *filmResponse {
 	}
 
 	return &filmResponse{
-		ID:              film.ID,
-		Title:           film.Title,
-		TitleOriginal:   film.TitleOriginal,
-		Poster:          film.Poster,
-		Cover:           film.Cover,
-		Director:        film.Director,
-		Description:     film.Description,
-		Duration:        film.Duration,
-		UserScore:       score,
-		Scores:          scores,
-		URL:             film.URL,
-		RatingKinopoisk: film.RatingKinopoisk,
-		RatingImdb:      film.RatingImdb,
-		RatingHalva:     float64(film.Halva()),
-		RatingSum:       float64(film.Sum()),
-		RatingAverage:   float64(film.Average()),
-		Year:            film.Year,
-		FilmLength:      film.FilmLength,
-		Serial:          film.Serial,
-		ShortFilm:       film.ShortFilm,
-		Genres:          film.Genres,
+		ID:               film.ID,
+		Title:            film.Title,
+		TitleOriginal:    film.TitleOriginal,
+		Poster:           film.Poster,
+		Cover:            film.Cover,
+		Director:         film.Director,
+		Description:      film.Description,
+		ShortDescription: film.ShortDescription,
+		Duration:         film.Duration,
+		UserScore:        score,
+		Scores:           scores,
+		URL:              film.URL,
+		RatingKinopoisk:  film.RatingKinopoisk,
+		RatingImdb:       film.RatingImdb,
+		RatingHalva:      float64(film.Halva()),
+		RatingSum:        float64(film.Sum()),
+		RatingAverage:    float64(film.Average()),
+		Year:             film.Year,
+		FilmLength:       film.FilmLength,
+		Serial:           film.Serial,
+		ShortFilm:        film.ShortFilm,
+		Genres:           film.Genres,
 	}
 }
 
@@ -247,27 +248,28 @@ func buildAll(all pfilm.Items, userID string) AllFilmsResponse {
 }
 
 type filmResponse struct {
-	ID              string         `json:"id"`
-	Title           string         `json:"title"`
-	TitleOriginal   string         `json:"title_original,omitempty"`
-	Poster          string         `json:"cover,omitempty"`
-	Cover           string         `json:"poster,omitempty"`
-	Director        string         `json:"director,omitempty"`
-	Description     string         `json:"description,omitempty"`
-	Duration        string         `json:"duration,omitempty"`
-	UserScore       *int           `json:"user_score,omitempty"`
-	Scores          map[string]int `json:"scores,omitempty"`
-	URL             string         `json:"kinopoisk,omitempty"`
-	RatingKinopoisk float64        `json:"rating_kinopoisk"`
-	RatingImdb      float64        `json:"rating_imdb"`
-	RatingHalva     float64        `json:"rating_halva"`
-	RatingSum       float64        `json:"rating_sum"`
-	RatingAverage   float64        `json:"rating_average"`
-	Year            int            `json:"year,omitempty"`
-	FilmLength      int            `json:"film_length,omitempty"`
-	Serial          bool           `json:"serial"`
-	ShortFilm       bool           `json:"short_film"`
-	Genres          []string       `json:"genres,omitempty"`
+	ID               string         `json:"id"`
+	Title            string         `json:"title"`
+	TitleOriginal    string         `json:"title_original,omitempty"`
+	Poster           string         `json:"cover,omitempty"`
+	Cover            string         `json:"poster,omitempty"`
+	Director         string         `json:"director,omitempty"`
+	Description      string         `json:"description,omitempty"`
+	ShortDescription string         `json:"short_description,omitempty"`
+	Duration         string         `json:"duration,omitempty"`
+	UserScore        *int           `json:"user_score,omitempty"`
+	Scores           map[string]int `json:"scores,omitempty"`
+	URL              string         `json:"kinopoisk,omitempty"`
+	RatingKinopoisk  float64        `json:"rating_kinopoisk"`
+	RatingImdb       float64        `json:"rating_imdb"`
+	RatingHalva      float64        `json:"rating_halva"`
+	RatingSum        float64        `json:"rating_sum"`
+	RatingAverage    float64        `json:"rating_average"`
+	Year             int            `json:"year,omitempty"`
+	FilmLength       int            `json:"film_length,omitempty"`
+	Serial           bool           `json:"serial"`
+	ShortFilm        bool           `json:"short_film"`
+	Genres           []string       `json:"genres,omitempty"`
 }
 
 type AllFilmsResponse struct {

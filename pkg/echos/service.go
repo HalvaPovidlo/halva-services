@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -22,8 +23,10 @@ type service struct {
 }
 
 func New() *service {
+	e := echo.New()
+	e.Use(middleware.CORSWithConfig(middleware.DefaultCORSConfig))
 	return &service{
-		echo: echo.New(),
+		echo: e,
 	}
 }
 

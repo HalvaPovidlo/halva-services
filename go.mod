@@ -14,7 +14,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/oauth2 v0.7.0
 	google.golang.org/api v0.121.0
-	gopkg.in/yaml.v2 v2.2.3
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (

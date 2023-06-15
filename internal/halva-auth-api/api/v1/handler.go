@@ -2,6 +2,7 @@ package apiv1
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -148,7 +149,7 @@ func (h *handler) callback(c echo.Context) error {
 	userID, username, avatar, err := h.auth.GetDiscordInfo(ctx, c.FormValue("code"), c.FormValue("state"), c.RealIP())
 	switch {
 	case errors.Is(err, auth.ErrUnknownUser):
-		contexts.GetLogger(ctx).Warn("Unknown discord user trying to connect!!!!!!!!!",
+		contexts.GetLogger(ctx).Warn("Unknown discord user trying to connect!",
 			zap.String("id", userID), zap.String("username", username))
 		return c.String(http.StatusNotFound, "Unknown user, ask andrei.khodko@gmail.com to add")
 	case err != nil:
@@ -172,7 +173,8 @@ func (h *handler) callback(c echo.Context) error {
 		Expiration:   time.Now().Add(jwt.TokenTTL),
 		RefreshToken: h.auth.GenerateRefreshToken(userID),
 	}
-	return c.JSON(http.StatusOK, resp)
+	//return c.Redirect(http.StatusPermanentRedirect, h.host+":80/"+resp.query())
+	return c.Redirect(http.StatusPermanentRedirect, "http://localhost:4200/"+resp.query())
 }
 
 type loginResponse struct {
@@ -181,6 +183,10 @@ type loginResponse struct {
 	RefreshToken string    `json:"refresh_token"`
 	Username     string    `json:"username,omitempty"`
 	Avatar       string    `json:"avatar,omitempty"`
+}
+
+func (r *loginResponse) query() string {
+	return fmt.Sprintf("?token=%s&username=%s&avatar=%s&refresh_token=%s&expiration=%s", r.Token, r.Username, r.Avatar, r.RefreshToken, r.Expiration.String())
 }
 
 type userResponse struct {

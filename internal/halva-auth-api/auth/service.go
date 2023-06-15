@@ -14,19 +14,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var knownUsers = map[string]struct{}{
-	"233195670125805568": {},
-	"242030987536629760": {},
-	"257456911270674433": {},
-	"320309512697413633": {},
-	"320310971593916416": {},
-	"320311179245256706": {},
-	"339482443943772160": {},
-	"397466273157480448": {},
-	"407858784354959361": {},
-	"644504316576530438": {},
-}
-
 var (
 	ErrBadState     = errors.New("state does not match")
 	ErrInvalidToken = errors.New("refresh token is invalid")
@@ -42,17 +29,19 @@ const (
 type Config struct {
 	ClientID     string   `yaml:"clientID"`
 	ClientSecret string   `yaml:"clientSecret"`
+	KnownUsers   []string `yaml:"known_users"`
 	Scopes       []string `yaml:"scopes"`
 }
 
 type service struct {
-	oauth   *oauth2.Config
-	refresh map[string]string // token -> id
-	mx      *sync.RWMutex
+	oauth      *oauth2.Config
+	knownUsers map[string]struct{}
+	refresh    map[string]string // token -> id
+	mx         *sync.RWMutex
 }
 
 func New(cfg Config) *service {
-	return &service{
+	s := &service{
 		oauth: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -63,9 +52,17 @@ func New(cfg Config) *service {
 				AuthStyle: oauth2.AuthStyleInParams,
 			},
 		},
-		refresh: make(map[string]string, len(knownUsers)*3),
-		mx:      &sync.RWMutex{},
+		mx: &sync.RWMutex{},
 	}
+
+	s.knownUsers = make(map[string]struct{}, len(cfg.KnownUsers))
+	for i := range cfg.KnownUsers {
+		s.knownUsers[cfg.KnownUsers[i]] = struct{}{}
+	}
+
+	s.refresh = make(map[string]string, len(s.knownUsers)*3)
+
+	return s
 }
 
 func (s *service) RedirectURL(redirectURL, key string) string {
@@ -102,7 +99,7 @@ func (s *service) GetDiscordInfo(ctx context.Context, authCode, reqState, key st
 		return "", "", "", errors.Wrap(err, "unmarshal response body")
 	}
 
-	if _, ok := knownUsers[discordUser.ID]; !ok {
+	if _, ok := s.knownUsers[discordUser.ID]; !ok {
 		return "", "", "", ErrUnknownUser
 	}
 

@@ -30,7 +30,7 @@ jobs:
         run: go build -o deployments/halva-films cmd/halva-films-api/main.go
 
       - name: Build windows
-        run: env GOOS=windows GOARCH=amd64 go build -o windows/halva-films.exe cmd/halva-auth-api/main.go
+        run: env GOOS=windows GOARCH=amd64 go build -o windows/halva-films.exe cmd/halva-films-api/main.go
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3

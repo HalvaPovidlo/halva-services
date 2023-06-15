@@ -44,15 +44,17 @@ type userService interface {
 type handler struct {
 	host string
 	port string
+	web  string
 	auth loginService
 	jwt  jwtService
 	user userService
 }
 
-func New(host, port string, login loginService, user userService, jwtService jwtService) *handler {
+func New(host, port, web string, login loginService, user userService, jwtService jwtService) *handler {
 	return &handler{
 		host: host,
 		port: port,
+		web:  web,
 		auth: login,
 		user: user,
 		jwt:  jwtService,
@@ -173,8 +175,7 @@ func (h *handler) callback(c echo.Context) error {
 		Expiration:   time.Now().Add(jwt.TokenTTL),
 		RefreshToken: h.auth.GenerateRefreshToken(userID),
 	}
-	//return c.Redirect(http.StatusPermanentRedirect, h.host+":80/"+resp.query())
-	return c.Redirect(http.StatusPermanentRedirect, "http://localhost:4200/"+resp.query())
+	return c.Redirect(http.StatusPermanentRedirect, fmt.Sprintf("%s:%s/%s", h.host, h.web, resp.query()))
 }
 
 type loginResponse struct {

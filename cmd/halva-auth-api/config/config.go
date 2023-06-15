@@ -20,6 +20,7 @@ type GeneralConfig struct {
 	Debug  bool
 	Host   string `yaml:"host" split_words:"true"`
 	Port   string `yaml:"port" split_words:"true"`
+	Web    string `yaml:"web" split_words:"true"`
 	Secret string `yaml:"secret" split_words:"true"`
 	Level  zapcore.Level
 }
@@ -41,6 +42,10 @@ func InitConfig(filePath, envPrefix string) (Config, error) {
 	}
 	if err := envconfig.Process(envPrefix, &cfg); err != nil {
 		return Config{}, err
+	}
+
+	if cfg.General.Web == "" {
+		cfg.General.Web = "80"
 	}
 
 	return cfg, nil

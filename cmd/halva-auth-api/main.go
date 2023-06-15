@@ -41,7 +41,7 @@ func main() {
 
 	jwtService := jwt.New(cfg.General.Secret)
 	authService := auth.New(cfg.Login)
-	handler := apiv1.New(cfg.General.Host, cfg.General.Port, authService, userService, jwtService)
+	handler := apiv1.New(cfg.General.Host, cfg.General.Port, cfg.General.Web, authService, userService, jwtService)
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)

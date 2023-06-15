@@ -26,8 +26,18 @@ jobs:
         with:
           go-version: 1.19
 
-      - name: Build
+      - name: Build linux
         run: go build -o deployments/halva-login cmd/halva-auth-api/main.go
+
+      - name: Build windows
+        run: env GOOS=windows GOARCH=amd64 go build -o windows/halva-login.exe cmd/halva-auth-api/main.go
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: halva-login
+          path: windows/halva-login.exe
+          retention-days: 5
 
       - name: Deploy
         run: |

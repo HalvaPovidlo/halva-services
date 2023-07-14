@@ -19,10 +19,10 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/log"
 )
 
-const configPath = "cmd/halva-films-api/config/secret.yaml"
+const configPathEnv = "CONFIG_PATH"
 
 func main() {
-	cfg, err := config.InitConfig(configPath, "")
+	cfg, err := config.InitConfig(configPathEnv, "")
 	if err != nil {
 		panic(err)
 	}

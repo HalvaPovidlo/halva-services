@@ -16,9 +16,13 @@
 
 # Dependency directories (remove the comment below to include it)
 vendor/
+
+# My files
 .idea/
 cmd/test
 *secret.yaml
+yandex_cloud
+yandex_cloud.pub
 halvabot-firebase.json
 
 # Go workspace file

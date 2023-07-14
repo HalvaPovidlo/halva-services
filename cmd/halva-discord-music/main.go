@@ -16,10 +16,10 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/socket"
 )
 
-const configPath = "cmd/halva-auth-api/config/secret.yaml"
+const configPathEnv = "CONFIG_PATH"
 
 func main() {
-	cfg, err := config.InitConfig(configPath, "")
+	cfg, err := config.InitConfig(configPathEnv, "")
 	if err != nil {
 		panic(err)
 	}

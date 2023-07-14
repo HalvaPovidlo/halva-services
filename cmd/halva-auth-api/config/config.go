@@ -25,11 +25,17 @@ type GeneralConfig struct {
 	Level  zapcore.Level
 }
 
-func InitConfig(filePath, envPrefix string) (Config, error) {
+func InitConfig(configPathEnv, envPrefix string) (Config, error) {
 	var (
 		configData []byte
 		err        error
+		filePath   string
 	)
+
+	if filePath = os.Getenv(configPathEnv); filePath == "" {
+		filePath = "cmd/halva-auth-api/config/secret.yaml"
+	}
+
 	if configData, err = os.ReadFile(filepath.Clean(filePath)); err != nil {
 		return Config{}, err
 	}

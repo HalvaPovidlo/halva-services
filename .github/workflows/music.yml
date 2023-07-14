@@ -27,10 +27,10 @@ jobs:
           go-version: '1.20'
 
       - name: Build linux
-        run: go build -o deployments/discord-music/halva-music cmd/halva-discord-music/main.go
+        run: env CGO_ENABLED=0 go build -o deployments/discord-music/halva-music cmd/halva-discord-music/main.go
 
       - name: Build windows
-        run: env GOOS=windows GOARCH=amd64 go build -o windows/halva-music.exe cmd/halva-discord-music/main.go
+        run: env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o windows/halva-music.exe cmd/halva-discord-music/main.go
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3

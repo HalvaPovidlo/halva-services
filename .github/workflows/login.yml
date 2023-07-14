@@ -27,10 +27,10 @@ jobs:
           go-version: '1.20'
 
       - name: Build linux
-        run: go build -o deployments/auth-api/halva-login cmd/halva-auth-api/main.go
+        run: env CGO_ENABLED=0 go build -o deployments/auth-api/halva-login cmd/halva-auth-api/main.go
 
       - name: Build windows
-        run: env GOOS=windows GOARCH=amd64 go build -o windows/halva-login.exe cmd/halva-auth-api/main.go
+        run: env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o windows/halva-login.exe cmd/halva-auth-api/main.go
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3

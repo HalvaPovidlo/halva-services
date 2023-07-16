@@ -19,6 +19,7 @@ vendor/
 
 # My files
 .idea/
+songs/
 cmd/test
 *secret.yaml
 yandex_cloud

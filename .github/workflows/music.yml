@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: shimataro/ssh-key-action@v2.3.1
+      - uses: shimataro/ssh-key-action@v2.5.1
         with:
           key: ${{ secrets.YANDEX_SSH }}
           known_hosts: ${{ secrets.YANDEX_HOST }}

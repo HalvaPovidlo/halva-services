@@ -1,6 +1,7 @@
 package film
 
 import (
+	"sync"
 	"time"
 
 	pcache "github.com/patrickmn/go-cache"
@@ -8,15 +9,20 @@ import (
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/film"
 )
 
+type userCache map[string]map[string]struct{}
+
 type cache struct {
-	film *pcache.Cache
-	user *pcache.Cache
+	film *pcache.Cache // films.Item
+
+	mx   *sync.RWMutex
+	user userCache // userID -> filmsID -> struct
 }
 
 func NewCache(defaultExpiration, cleanupInterval time.Duration) *cache {
 	return &cache{
 		film: pcache.New(defaultExpiration, cleanupInterval),
-		user: pcache.New(defaultExpiration, cleanupInterval),
+		mx:   &sync.RWMutex{},
+		user: make(userCache, 10),
 	}
 }
 
@@ -54,17 +60,58 @@ func (c *cache) All() film.Items {
 	return result
 }
 
-func (c *cache) SetUser(userID string, items film.Items) {
-	c.user.SetDefault(userID, items)
-}
+func (c *cache) User(userID string) ([]string, bool) {
+	c.mx.RLock()
+	defer c.mx.RUnlock()
 
-func (c *cache) User(userID string) (film.Items, bool) {
-	v, ok := c.user.Get(userID)
+	films, ok := c.user[userID]
 	if !ok {
 		return nil, false
 	}
-	if f, ok := v.(film.Items); ok {
-		return f, true
+
+	res := make([]string, 0, len(films))
+	for k, _ := range films {
+		res = append(res, k)
 	}
-	return nil, false
+	return res, true
+}
+
+func (c *cache) SetUser(userID string, filmsID []string) {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
+	films, _ := c.user[userID]
+	if len(films) == 0 {
+		films = make(map[string]struct{}, len(filmsID))
+	}
+	for i := range filmsID {
+		films[filmsID[i]] = struct{}{}
+	}
+
+	c.user[userID] = films
+}
+
+func (c *cache) UserAdd(userID string, filmID string) {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
+	films, _ := c.user[userID]
+	if len(films) == 0 {
+		films = make(map[string]struct{})
+	}
+
+	films[filmID] = struct{}{}
+	c.user[userID] = films
+}
+
+func (c *cache) UserRemove(userID string, filmID string) {
+	c.mx.Lock()
+	defer c.mx.Unlock()
+
+	films, _ := c.user[userID]
+	if len(films) == 0 {
+		films = make(map[string]struct{})
+	}
+
+	delete(films, filmID)
 }

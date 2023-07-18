@@ -21,8 +21,10 @@ type cacheService interface {
 	Get(id string) (*film.Item, bool)
 	SetAll(items film.Items)
 	All() film.Items
-	User(userID string) (film.Items, bool)
-	SetUser(userID string, items film.Items)
+	User(userID string) ([]string, bool)
+	SetUser(userID string, filmsID []string)
+	UserAdd(userID string, filmID string)
+	UserRemove(userID string, filmID string)
 }
 
 type storageService interface {
@@ -51,7 +53,18 @@ func New(kinopoisk kinopoisk, cache cacheService, storage storageService) *servi
 }
 
 func (s *service) FillCache(ctx context.Context) error {
-	_, err := s.All(ctx)
+	films, err := s.All(ctx)
+	users := make(map[string][]string)
+	for i := range films {
+		for userID, _ := range films[i].Scores {
+			users[userID] = append(users[userID], films[i].ID)
+		}
+	}
+
+	for userID, films := range users {
+		s.cache.SetUser(userID, films)
+	}
+
 	return err
 }
 
@@ -72,8 +85,9 @@ func (s *service) New(ctx context.Context, userID, url string, score film.Score)
 	if err := s.storage.Set(ctx, userID, f); err != nil {
 		return nil, errors.Wrap(err, "insert film in storage")
 	}
-	s.cache.Set(f)
 
+	s.cache.Set(f)
+	s.cache.UserAdd(userID, f.ID)
 	return f, nil
 }
 
@@ -96,8 +110,8 @@ func (s *service) All(ctx context.Context) (film.Items, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "get film from storage")
 	}
-	s.cache.SetAll(films)
 
+	s.cache.SetAll(films)
 	return films, nil
 }
 
@@ -116,7 +130,9 @@ func (s *service) Score(ctx context.Context, userID, url string, score film.Scor
 	if err := s.storage.Set(ctx, userID, cached); err != nil {
 		return nil, errors.Wrap(err, "insert film to storage")
 	}
+
 	s.cache.Set(cached)
+	s.cache.UserAdd(userID, cached.ID)
 	return cached, nil
 }
 
@@ -137,22 +153,23 @@ func (s *service) RemoveScore(ctx context.Context, userID, url string) (*film.It
 		return nil, errors.Wrap(err, "insert film to storage")
 	}
 	s.cache.Set(cached)
+	s.cache.UserRemove(userID, cached.ID)
 	return cached, nil
 }
 
 func (s *service) User(ctx context.Context, userID string) (film.Items, error) {
-	cached, ok := s.cache.User(userID)
-	if ok {
-		return cached, nil
+	var err error
+	filmsID, ok := s.cache.User(userID)
+	if !ok {
+		filmsID, err = s.storage.User(ctx, userID)
+		switch {
+		case status.Code(err) == codes.NotFound:
+			return nil, ErrNotFound
+		case err != nil:
+			return nil, errors.Wrap(err, "get user films id from storage")
+		}
 	}
-
-	filmsID, err := s.storage.User(ctx, userID)
-	switch {
-	case status.Code(err) == codes.NotFound:
-		return nil, ErrNotFound
-	case err != nil:
-		return nil, errors.Wrap(err, "get user films id from storage")
-	}
+	s.cache.SetUser(userID, filmsID)
 
 	userFilms := make(film.Items, 0, len(filmsID))
 	for i := range filmsID {
@@ -161,6 +178,5 @@ func (s *service) User(ctx context.Context, userID string) (film.Items, error) {
 		}
 	}
 
-	s.cache.SetUser(userID, userFilms)
 	return userFilms, nil
 }

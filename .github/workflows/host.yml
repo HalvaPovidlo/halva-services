@@ -1,4 +1,4 @@
-name: films_deploy
+name: host_deploy
 on:
   workflow_dispatch:
     inputs:

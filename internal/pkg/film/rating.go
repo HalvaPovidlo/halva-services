@@ -25,6 +25,17 @@ func (f Items) SortKinopoisk() {
 	})
 }
 
+func (f Items) SortAlphabetic() {
+	sort.Slice(f, func(i, j int) bool {
+		a := f[i].Title
+		b := f[j].Title
+		if a == b {
+			return f[i].Title < f[j].Title
+		}
+		return a < b
+	})
+}
+
 func (f Items) SortIMDB() {
 	sort.Slice(f, func(i, j int) bool {
 		a := f[i].RatingImdb

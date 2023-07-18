@@ -118,6 +118,7 @@ func (h *handler) my(c echo.Context) error {
 		return err
 	}
 
+	userFilms.SortAlphabetic()
 	return c.JSON(http.StatusOK, buildAll(userFilms, userID))
 }
 
@@ -143,6 +144,8 @@ func (h *handler) all(c echo.Context) error {
 		allFilms.SortAverage()
 	case SortRatingScoreNumber:
 		allFilms.SortScoreNumber()
+	default:
+		allFilms.SortAlphabetic()
 	}
 
 	return c.JSON(http.StatusOK, buildAll(allFilms, userID))

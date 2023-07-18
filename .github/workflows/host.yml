@@ -1,0 +1,45 @@
+name: films_deploy
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      S_NAME: ${{ secrets.YANDEX_SERVER_NAME }}
+      S_PASSWORD: ${{ secrets.YANDEX_SSH }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: shimataro/ssh-key-action@v2.5.1
+        with:
+          key: ${{ secrets.YANDEX_SSH }}
+          known_hosts: ${{ secrets.YANDEX_HOST }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+
+      - name: Build linux
+        run: env CGO_ENABLED=0 go build -o deployments/host/halva-host cmd/halva-host/main.go
+
+      - name: Build windows
+        run: env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o windows/halva-host.exe cmd/halva-host/main.go
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: halva-host
+          path: windows/halva-host.exe
+          retention-days: 5
+
+      - name: Deploy
+        run: |
+          rsync -avze "ssh -o StrictHostKeyChecking=no" deployments/host/* "$S_NAME":/home/halva/services/www/
+          ssh -o StrictHostKeyChecking=no "$S_NAME" /home/halva/services/www/restart.sh

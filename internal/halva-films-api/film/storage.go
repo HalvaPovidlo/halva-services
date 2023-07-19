@@ -84,7 +84,7 @@ func (s *storage) Comments(ctx context.Context, filmID string) ([]film.Comment, 
 func (s *storage) AddComment(ctx context.Context, filmID string, comment *film.Comment) error {
 	_, _, err := s.Collection(fire.FilmsCollection).Doc(filmID).Collection(fire.CommentsCollection).Add(ctx, comment)
 	if err != nil {
-		return fmt.Errorf("add comment to collection: %+v", err)
+		return fmt.Errorf("add comment to collection: %+w", err)
 	}
 	return nil
 }

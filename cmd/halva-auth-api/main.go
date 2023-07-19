@@ -13,6 +13,7 @@ import (
 	apiv1 "github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/api/v1"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/auth"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-auth-api/user"
+	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 	"github.com/HalvaPovidlo/halva-services/pkg/echos"
 	"github.com/HalvaPovidlo/halva-services/pkg/firestore"
 	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
@@ -27,14 +28,15 @@ func main() {
 		panic(err)
 	}
 	logger := log.NewLogger(cfg.General.Debug)
+	ctx := contexts.WithLogger(context.Background(), logger)
 
-	fireClient, err := firestore.New(context.Background(), "halvabot-firebase.json")
+	fireClient, err := firestore.New(ctx, "halvabot-firebase.json")
 	if err != nil {
 		logger.Fatal("failed to init firestore client", zap.Error(err))
 	}
 
 	userService := user.New(user.NewCache(cache.NoExpiration, cache.NoExpiration), user.NewStorage(fireClient))
-	err = userService.FillCache(context.Background())
+	err = userService.FillCache(ctx)
 	if err != nil {
 		logger.Fatal("failed to fill user service cache", zap.Error(err))
 	}
@@ -56,7 +58,7 @@ func main() {
 	signal.Stop(stop)
 	close(stop)
 
-	if err := echoServer.Shutdown(context.Background()); err != nil {
+	if err := echoServer.Shutdown(ctx); err != nil {
 		logger.Error("failed echo server shutdown", zap.Error(err))
 	}
 	logger.Info("stopped")

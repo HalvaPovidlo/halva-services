@@ -51,7 +51,7 @@ func (m *manager) readSocket(ctx context.Context, socket *socket) {
 func (m *manager) Open(c echo.Context) error {
 	socket, err := NewSocket(m.ctx, c)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, fmt.Errorf("start new socket: %w", err).Error())
+		return c.String(http.StatusInternalServerError, fmt.Errorf("start new socket: %+w", err).Error())
 	}
 
 	m.mx.Lock()
@@ -71,7 +71,7 @@ func (m *manager) Write(data []byte, id uuid.UUID) error {
 	}
 
 	if err := socket.Write(data); err != nil {
-		return fmt.Errorf("write to the socket: %w", err)
+		return fmt.Errorf("write to the socket: %+w", err)
 	}
 	return nil
 }
@@ -86,7 +86,7 @@ func (m *manager) WriteAll(data []byte) error {
 
 	for i := range sockets {
 		if err := sockets[i].Write(data); err != nil {
-			return fmt.Errorf("write to the socket: %w", err)
+			return fmt.Errorf("write to the socket: %+w", err)
 		}
 	}
 	return nil

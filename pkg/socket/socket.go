@@ -23,7 +23,7 @@ func NewSocket(ctx context.Context, c echo.Context) (*socket, error) {
 	up := &websocket.Upgrader{}
 	conn, err := up.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("upgrade echo context to websocket: %w", err)
+		return nil, fmt.Errorf("upgrade echo context to websocket: %+w", err)
 	}
 
 	s := &socket{
@@ -69,7 +69,7 @@ func (s *socket) processRead(ctx context.Context) {
 
 func (s *socket) Write(data []byte) error {
 	if err := s.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		return fmt.Errorf("write message: %w", err)
+		return fmt.Errorf("write message: %+w", err)
 	}
 	return nil
 }

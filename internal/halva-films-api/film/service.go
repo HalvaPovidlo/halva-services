@@ -111,7 +111,7 @@ func (s *service) get(ctx context.Context, url string, withComments bool) (*film
 
 	comments, err := s.storage.Comments(ctx, f.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get comments from storage: %+v", err)
+		return nil, fmt.Errorf("get comments from storage: %+w", err)
 	}
 	f.Comments = comments
 	f.NoComments = len(f.Comments) == 0
@@ -196,7 +196,7 @@ func (s *service) Comment(ctx context.Context, userID, url, text string) (*film.
 	f.NoComments = false
 
 	if err := s.storage.AddComment(ctx, f.ID, &comment); err != nil {
-		return nil, fmt.Errorf("add comment to storage: %+v", err)
+		return nil, fmt.Errorf("add comment to storage: %+w", err)
 	}
 	s.cache.Set(f)
 	return f, nil

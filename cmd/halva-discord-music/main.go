@@ -41,7 +41,7 @@ func main() {
 	signal.Stop(stop)
 	close(stop)
 
-	if err := echoServer.Shutdown(context.Background()); err != nil {
+	if err := echoServer.Shutdown(ctx); err != nil {
 		logger.Error("failed echo server shutdown", zap.Error(err))
 	}
 	logger.Info("stopped")

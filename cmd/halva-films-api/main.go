@@ -13,6 +13,7 @@ import (
 	apiv1 "github.com/HalvaPovidlo/halva-services/internal/halva-films-api/api/v1"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-films-api/film"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-films-api/kinopoisk"
+	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 	"github.com/HalvaPovidlo/halva-services/pkg/echos"
 	"github.com/HalvaPovidlo/halva-services/pkg/firestore"
 	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
@@ -27,8 +28,9 @@ func main() {
 		panic(err)
 	}
 	logger := log.NewLogger(cfg.General.Debug)
+	ctx := contexts.WithLogger(context.Background(), logger)
 
-	fireClient, err := firestore.New(context.Background(), "halvabot-firebase.json")
+	fireClient, err := firestore.New(ctx, "halvabot-firebase.json")
 	if err != nil {
 		logger.Fatal("failed to init firestore client", zap.Error(err))
 	}
@@ -38,8 +40,8 @@ func main() {
 		film.NewCache(cache.NoExpiration, cache.NoExpiration),
 		film.NewStorage(fireClient),
 	)
-	err = filmService.FillCache(context.Background())
-	if err != nil {
+
+	if err = filmService.FillCache(ctx); err != nil {
 		logger.Fatal("failed to fill film service cache", zap.Error(err))
 	}
 
@@ -59,7 +61,7 @@ func main() {
 	signal.Stop(stop)
 	close(stop)
 
-	if err := echoServer.Shutdown(context.Background()); err != nil {
+	if err := echoServer.Shutdown(ctx); err != nil {
 		logger.Error("failed echo server shutdown", zap.Error(err))
 	}
 	logger.Info("stopped")

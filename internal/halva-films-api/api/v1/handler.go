@@ -258,13 +258,16 @@ func build(film *pfilm.Item, userID string, withComments bool) *filmResponse {
 		score = &vint
 	}
 
-	scores := make(map[string]int, len(film.Scores))
-	for k, v := range film.Scores {
-		scores[k] = int(v)
+	var scores map[string]int
+	if userID != "" {
+		scores = make(map[string]int, len(film.Scores))
+		for k, v := range film.Scores {
+			scores[k] = int(v)
+		}
 	}
 
 	var comments []commentResp
-	if withComments && !film.NoComments {
+	if userID != "" && withComments && !film.NoComments {
 		comments = make([]commentResp, 0, len(film.Comments))
 		for i := range film.Comments {
 			comments = append(comments, commentResp{

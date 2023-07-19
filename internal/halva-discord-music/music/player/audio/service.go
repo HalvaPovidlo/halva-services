@@ -1,15 +1,18 @@
 package audio
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/voice"
+	"github.com/diamondburned/arikawa/v3/voice/udp"
 	"github.com/diamondburned/arikawa/v3/voice/voicegateway"
 	"github.com/diamondburned/oggreader"
 	"go.uber.org/zap"
@@ -18,27 +21,39 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
+const (
+	frameDuration = 60 // ms
+	timeIncrement = 2880
+)
+
 type Service struct {
-	session  *voice.Session
-	workChan chan struct{}
-	finished chan struct{}
-	cancel   context.CancelFunc
+	session   *voice.Session
+	workChan  chan struct{}
+	finished  chan struct{}
+	songTicks chan time.Duration
+	cancel    context.CancelFunc
 }
 
 func New(ctx context.Context, channelID discord.ChannelID) (*Service, error) {
 	session, err := voice.NewSession(ds.State)
 	if err != nil {
-		return nil, fmt.Errorf("create a voice session: %w", err)
+		return nil, fmt.Errorf("create a voice session: %+w", err)
 	}
 
+	session.SetUDPDialer(udp.DialFuncWithFrequency(
+		frameDuration*time.Millisecond,
+		timeIncrement,
+	))
+
 	if err := session.JoinChannel(ctx, channelID, false, true); err != nil {
-		return nil, fmt.Errorf("connect to voice channel: %w", err)
+		return nil, fmt.Errorf("connect to voice channel: %+w", err)
 	}
 
 	return &Service{
-		session:  session,
-		workChan: make(chan struct{}, 1),
-		finished: make(chan struct{}),
+		session:   session,
+		workChan:  make(chan struct{}, 1),
+		finished:  make(chan struct{}),
+		songTicks: make(chan time.Duration),
 	}, nil
 }
 
@@ -61,6 +76,8 @@ func (s *Service) Play(ctx context.Context, source string, position time.Duratio
 				return
 			}
 
+			go s.streamSongPosition(stderr)
+
 			if err := s.session.Speaking(ctx, voicegateway.Microphone); err != nil {
 				logger.Error("failed to send speaking packet to discord", zap.Error(err))
 				return
@@ -71,8 +88,8 @@ func (s *Service) Play(ctx context.Context, source string, position time.Duratio
 				return
 			}
 
-			if err, std := ffmpeg.Wait(), stderr.String(); err != nil && std != "" {
-				logger.Error("ffmpeg finished", zap.String("stderr", std), zap.Error(err))
+			if err := ffmpeg.Wait(); err != nil {
+				logger.Error("ffmpeg finished", zap.Error(err))
 			}
 		}()
 	default:
@@ -113,23 +130,43 @@ func (s *Service) Destroy() {
 	}
 }
 
-func ffmpegStart(ctx context.Context, source string, position time.Duration) (*exec.Cmd, io.ReadCloser, bytes.Buffer, error) {
-	ffmpeg := exec.CommandContext(ctx, "ffmpeg",
-		"-loglevel", "error", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
-		"-ss", formatTime(position),
+func (s *Service) SongPosition() <-chan time.Duration {
+	return s.songTicks
+}
+
+func ffmpegStart(ctx context.Context, source string, position time.Duration) (*exec.Cmd, io.ReadCloser, io.ReadCloser, error) {
+	args := []string{"-hide_banner", "-loglevel", "error"}
+	if position == 0 {
+		args = append(args, "-re") // high cpu, impossible to start from not 0 position
+	}
+	args = append(args, []string{
+		"-threads", "1",
 		"-i", source,
-		"-vn", "-codec", "libopus", "-vbr", "off", "-frame_duration", "20", "-f", "opus", "-")
+		"-ss", formatTime(position),
+		"-c:a", "libopus",
+		"-b:a", "96k",
+		"-frame_duration", strconv.Itoa(frameDuration),
+		"-vbr", "off",
+		"-f", "opus",
+		"-progress", "pipe:2",
+		"-",
+	}...)
+
+	ffmpeg := exec.CommandContext(ctx, "ffmpeg", args...)
 
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
-		return nil, nil, bytes.Buffer{}, fmt.Errorf("get ffmpeg stdout: %w", err)
+		return nil, nil, nil, fmt.Errorf("get ffmpeg stdout: %+w", err)
+
+	}
+	stderr, err := ffmpeg.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get ffmpeg stderr: %+w", err)
 
 	}
 
-	var stderr bytes.Buffer
-	ffmpeg.Stderr = &stderr
 	if err := ffmpeg.Start(); err != nil {
-		return nil, nil, bytes.Buffer{}, fmt.Errorf("start ffmpeg process: %w", err)
+		return nil, nil, nil, fmt.Errorf("start ffmpeg process: %+w", err)
 	}
 	return ffmpeg, stdout, stderr, nil
 }
@@ -150,3 +187,25 @@ func formatTime(duration time.Duration) string {
 
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }
+
+func (s *Service) streamSongPosition(stdout io.ReadCloser) {
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "out_time_ms=") {
+			microsecondsStr := strings.TrimPrefix(line, "out_time_ms=")
+			microseconds, err := strconv.ParseInt(microsecondsStr, 10, 64)
+			if err != nil {
+				continue
+			}
+			s.songTicks <- time.Duration(microseconds) * time.Microsecond
+		}
+	}
+}
+
+// streaming ffmpeg
+//ffmpeg := exec.CommandContext(ctx, "ffmpeg",
+//	"-loglevel", "error", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+//	"-ss", formatTime(position),
+//	"-i", source,
+//	"-vn", "-codec", "libopus", "-vbr", "off", "-frame_duration", "20", "-f", "opus", "-")

@@ -3,6 +3,7 @@ package apiv1
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -21,6 +22,9 @@ const (
 	SortRatingSum         = "sum"
 	SortRatingAverage     = "average"
 	SortRatingScoreNumber = "score_number"
+
+	errEmptyID      = "empty id"
+	errFilmNotFound = "film not found"
 )
 
 type filmService interface {
@@ -30,6 +34,7 @@ type filmService interface {
 	Score(ctx context.Context, userID, url string, score pfilm.Score) (*pfilm.Item, error)
 	RemoveScore(ctx context.Context, userID, url string) (*pfilm.Item, error)
 	User(ctx context.Context, userID string) (pfilm.Items, error)
+	Comment(ctx context.Context, userID, url, text string) (*pfilm.Item, error)
 }
 
 type jwtService interface {
@@ -62,6 +67,7 @@ func (h *handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/films/my", h.my, h.jwt.Authorization)
 	e.PATCH("/api/v1/films/:id/score", h.score, h.jwt.Authorization)
 	e.PATCH("/api/v1/films/:id/unscore", h.removeScore, h.jwt.Authorization)
+	e.POST("/api/v1/films/:id/comment", h.comment, h.jwt.Authorization)
 }
 
 func (h *handler) new(c echo.Context) error {
@@ -73,7 +79,7 @@ func (h *handler) new(c echo.Context) error {
 
 	userID, err := h.jwt.ExtractUserID(c)
 	if err != nil {
-		return err
+		return c.String(http.StatusUnauthorized, err.Error())
 	}
 
 	score, err := strconv.Atoi(scoreStr)
@@ -89,7 +95,7 @@ func (h *handler) new(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, userID))
+	return c.JSON(http.StatusOK, build(film, userID, false))
 }
 
 func (h *handler) get(c echo.Context) error {
@@ -103,16 +109,19 @@ func (h *handler) get(c echo.Context) error {
 	film, err := h.film.Get(c.Request().Context(), id)
 	switch {
 	case errors.Is(err, films.ErrNotFound):
-		return c.String(http.StatusNotFound, "Film not found")
+		return c.String(http.StatusNotFound, errFilmNotFound)
 	case err != nil:
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, userID))
+	return c.JSON(http.StatusOK, build(film, userID, true))
 }
 
 func (h *handler) my(c echo.Context) error {
-	userID, _ := h.jwt.ExtractUserID(c)
+	userID, err := h.jwt.ExtractUserID(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, err.Error())
+	}
 	userFilms, err := h.film.User(c.Request().Context(), userID)
 	switch {
 	case errors.Is(err, films.ErrNotFound):
@@ -148,7 +157,7 @@ func (h *handler) score(c echo.Context) error {
 
 	userID, err := h.jwt.ExtractUserID(c)
 	if err != nil {
-		return err
+		return c.String(http.StatusUnauthorized, err.Error())
 	}
 
 	score, err := strconv.Atoi(scoreStr)
@@ -159,36 +168,63 @@ func (h *handler) score(c echo.Context) error {
 	film, err := h.film.Score(c.Request().Context(), userID, id, pfilm.Score(score))
 	switch {
 	case errors.Is(err, films.ErrNotFound):
-		return c.String(http.StatusNotFound, "Film not found")
+		return c.String(http.StatusNotFound, errFilmNotFound)
 	case err != nil:
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, userID))
+	return c.JSON(http.StatusOK, build(film, userID, false))
 }
 
 func (h *handler) removeScore(c echo.Context) error {
 	id := c.Param("id")
 	if id == "" {
-		return c.String(http.StatusBadRequest, "id is empty")
+		return c.String(http.StatusBadRequest, errEmptyID)
 	}
 
 	userID, err := h.jwt.ExtractUserID(c)
 	if err != nil {
-		return err
+		return c.String(http.StatusUnauthorized, err.Error())
 	}
 
 	film, err := h.film.RemoveScore(c.Request().Context(), userID, id)
 	switch {
 	case errors.Is(err, films.ErrNotFound):
-		return c.String(http.StatusNotFound, "Film not found")
+		return c.String(http.StatusNotFound, errFilmNotFound)
 	case errors.Is(err, films.ErrNoScore):
-		return c.String(http.StatusNotFound, "Film has no score from you")
+		return c.String(http.StatusNotFound, "film has no score from you")
 	case err != nil:
 		return err
 	}
 
-	return c.JSON(http.StatusOK, build(film, ""))
+	return c.JSON(http.StatusOK, build(film, "", false))
+}
+
+func (h *handler) comment(c echo.Context) error {
+	userID, err := h.jwt.ExtractUserID(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, err.Error())
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		return c.String(http.StatusBadRequest, errEmptyID)
+	}
+
+	var req commentRequest
+	if err := (&echo.DefaultBinder{}).BindBody(c, &req); err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+
+	film, err := h.film.Comment(c.Request().Context(), userID, id, req.Text)
+	switch {
+	case errors.Is(err, films.ErrNotFound):
+		return c.String(http.StatusNotFound, errFilmNotFound)
+	case err != nil:
+		return err
+	}
+
+	return c.JSON(http.StatusOK, build(film, userID, true))
 }
 
 func (h *handler) sortFilms(films pfilm.Items, sort string) {
@@ -215,7 +251,7 @@ func (h *handler) sortFilms(films pfilm.Items, sort string) {
 	}
 }
 
-func build(film *pfilm.Item, userID string) *filmResponse {
+func build(film *pfilm.Item, userID string, withComments bool) *filmResponse {
 	var score *int
 	if v, ok := film.Scores[userID]; userID != "" && ok {
 		vint := int(v)
@@ -225,6 +261,21 @@ func build(film *pfilm.Item, userID string) *filmResponse {
 	scores := make(map[string]int, len(film.Scores))
 	for k, v := range film.Scores {
 		scores[k] = int(v)
+	}
+
+	var comments []commentResp
+	if withComments && !film.NoComments {
+		comments = make([]commentResp, 0, len(film.Comments))
+		for i := range film.Comments {
+			comments = append(comments, commentResp{
+				UserID:    film.Comments[i].UserID,
+				Text:      film.Comments[i].Text,
+				CreatedAt: film.Comments[i].CreatedAt,
+			})
+		}
+		sort.Slice(comments, func(i, j int) bool {
+			return comments[i].CreatedAt.Before(comments[j].CreatedAt)
+		})
 	}
 
 	return &filmResponse{
@@ -250,14 +301,15 @@ func build(film *pfilm.Item, userID string) *filmResponse {
 		Serial:           film.Serial,
 		ShortFilm:        film.ShortFilm,
 		Genres:           film.Genres,
+		Comments:         comments,
 	}
 }
 
-func buildAll(all pfilm.Items, userID string) AllFilmsResponse {
-	var resp AllFilmsResponse
+func buildAll(all pfilm.Items, userID string) allFilmsResponse {
+	var resp allFilmsResponse
 	resp.Films = make([]filmResponse, 0, len(all))
 	for i := range all {
-		resp.Films = append(resp.Films, *build(&all[i], userID))
+		resp.Films = append(resp.Films, *build(&all[i], userID, false))
 	}
 	return resp
 }
@@ -285,8 +337,19 @@ type filmResponse struct {
 	Serial           bool           `json:"serial"`
 	ShortFilm        bool           `json:"short_film"`
 	Genres           []string       `json:"genres,omitempty"`
+	Comments         []commentResp  `json:"comments,omitempty"`
 }
 
-type AllFilmsResponse struct {
+type commentResp struct {
+	UserID    string    `json:"user_id"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type allFilmsResponse struct {
 	Films []filmResponse `json:"films"`
+}
+
+type commentRequest struct {
+	Text string `json:"text"`
 }

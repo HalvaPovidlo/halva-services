@@ -2,6 +2,7 @@ package film
 
 import (
 	"context"
+	"fmt"
 
 	"cloud.google.com/go/firestore"
 	"github.com/pkg/errors"
@@ -58,6 +59,34 @@ func (s *storage) Set(ctx context.Context, userID string, item *film.Item) error
 	})
 
 	return errors.Wrap(err, "run set film transaction")
+}
+
+func (s *storage) Comments(ctx context.Context, filmID string) ([]film.Comment, error) {
+	comments := make([]film.Comment, 0, 10)
+	iter := s.Collection(fire.FilmsCollection).Doc(filmID).Collection(fire.CommentsCollection).Documents(ctx)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, errors.Wrap(err, "get next iterator")
+		}
+		c, err := film.ParseComment(doc)
+		if err != nil {
+			return nil, errors.Wrap(err, "parse film doc")
+		}
+		comments = append(comments, *c)
+	}
+	return comments, nil
+}
+
+func (s *storage) AddComment(ctx context.Context, filmID string, comment *film.Comment) error {
+	_, _, err := s.Collection(fire.FilmsCollection).Doc(filmID).Collection(fire.CommentsCollection).Add(ctx, comment)
+	if err != nil {
+		return fmt.Errorf("add comment to collection: %+v", err)
+	}
+	return nil
 }
 
 func (s *storage) All(ctx context.Context) (film.Items, error) {

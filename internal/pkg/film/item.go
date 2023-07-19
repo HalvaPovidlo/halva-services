@@ -29,7 +29,7 @@ type Item struct {
 	Duration                 string           `firestore:"duration,omitempty" json:"duration,omitempty"`
 	Scores                   map[string]Score `firestore:"scores" json:"scores,omitempty"`
 	Comments                 []Comment        `firestore:"-" json:"comments,omitempty"`
-	WithComments             bool             `firestore:"-" json:"-"`
+	NoComments               bool             `firestore:"-" json:"-"`
 	URL                      string           `firestore:"kinopoisk,omitempty" json:"kinopoisk,omitempty"`
 	RatingKinopoisk          float64          `firestore:"rating_kinopoisk,omitempty" json:"rating_kinopoisk,omitempty"`
 	RatingKinopoiskVoteCount int              `firestore:"rating_kinopoisk_vote_count,omitempty" json:"rating_kinopoisk_vote_count,omitempty"`
@@ -59,4 +59,12 @@ func Parse(doc *firestore.DocumentSnapshot) (*Item, error) {
 	}
 	f.ID = doc.Ref.ID
 	return &f, nil
+}
+
+func ParseComment(doc *firestore.DocumentSnapshot) (*Comment, error) {
+	var c Comment
+	if err := doc.DataTo(&c); err != nil {
+		return nil, errors.Wrap(err, "unmarshall data")
+	}
+	return &c, nil
 }

@@ -182,7 +182,7 @@ func MergeFilm(kf *filmResp, f *film.Item) *film.Item {
 		Duration:                 f.Duration,
 		Scores:                   f.Scores,
 		Comments:                 f.Comments,
-		WithComments:             f.WithComments,
+		NoComments:               f.NoComments,
 		URL:                      f.URL,
 		RatingKinopoisk:          kf.RatingKinopoisk,
 		RatingKinopoiskVoteCount: kf.RatingKinopoiskVoteCount,

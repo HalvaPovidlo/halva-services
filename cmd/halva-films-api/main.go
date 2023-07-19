@@ -44,7 +44,7 @@ func main() {
 	}
 
 	jwtService := jwt.New(cfg.General.Secret)
-	handler := apiv1.New(filmService, jwtService)
+	handler := apiv1.New(filmService, jwtService, cfg.General.Sort)
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)

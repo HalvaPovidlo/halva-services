@@ -21,16 +21,16 @@ func (f Items) SortKinopoisk() {
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
-		return a < b
+		return a > b
 	})
 }
 
-func (f Items) SortAlphabetic() {
+func (f Items) SortLexicographic() {
 	sort.Slice(f, func(i, j int) bool {
 		a := f[i].Title
 		b := f[j].Title
 		if a == b {
-			return f[i].Title < f[j].Title
+			return f[i].ID < f[j].ID
 		}
 		return a < b
 	})
@@ -43,7 +43,7 @@ func (f Items) SortIMDB() {
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
-		return a < b
+		return a > b
 	})
 }
 
@@ -54,7 +54,7 @@ func (f Items) SortScoreNumber() {
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
-		return a < b
+		return a > b
 	})
 }
 
@@ -77,7 +77,7 @@ func (f Items) SortAverage() {
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
-		return a < b
+		return a > b
 	})
 }
 
@@ -96,7 +96,7 @@ func (f Items) SortSum() {
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
-		return a < b
+		return a > b
 	})
 }
 
@@ -112,7 +112,7 @@ func (f Items) SortHalva() {
 		if a == b {
 			return f[i].Title < f[j].Title
 		}
-		return a < b
+		return a > b
 	})
 }
 

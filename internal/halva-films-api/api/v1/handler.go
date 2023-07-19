@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	SortLexicographic     = "lexicographic"
 	SortRatingKinopoisk   = "kinopoisk"
 	SortRatingImdb        = "imdb"
 	SortRatingHalva       = "halva"
@@ -37,15 +38,17 @@ type jwtService interface {
 }
 
 type handler struct {
-	film     filmService
-	jwt      jwtService
-	tokenTTL time.Duration
+	film        filmService
+	jwt         jwtService
+	defaultSort string
+	tokenTTL    time.Duration
 }
 
-func New(filmService filmService, jwtService jwtService) *handler {
+func New(filmService filmService, jwtService jwtService, defaultSort string) *handler {
 	return &handler{
-		jwt:  jwtService,
-		film: filmService,
+		jwt:         jwtService,
+		film:        filmService,
+		defaultSort: defaultSort,
 	}
 }
 
@@ -118,7 +121,7 @@ func (h *handler) my(c echo.Context) error {
 		return err
 	}
 
-	userFilms.SortAlphabetic()
+	h.sortFilms(userFilms, h.defaultSort)
 	return c.JSON(http.StatusOK, buildAll(userFilms, userID))
 }
 
@@ -131,22 +134,7 @@ func (h *handler) all(c echo.Context) error {
 		return err
 	}
 
-	switch sort {
-	case SortRatingKinopoisk:
-		allFilms.SortKinopoisk()
-	case SortRatingImdb:
-		allFilms.SortIMDB()
-	case SortRatingHalva:
-		allFilms.SortHalva()
-	case SortRatingSum:
-		allFilms.SortSum()
-	case SortRatingAverage:
-		allFilms.SortAverage()
-	case SortRatingScoreNumber:
-		allFilms.SortScoreNumber()
-	default:
-		allFilms.SortAlphabetic()
-	}
+	h.sortFilms(allFilms, sort)
 
 	return c.JSON(http.StatusOK, buildAll(allFilms, userID))
 }
@@ -201,6 +189,30 @@ func (h *handler) removeScore(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, build(film, ""))
+}
+
+func (h *handler) sortFilms(films pfilm.Items, sort string) {
+	switch sort {
+	case SortLexicographic:
+		films.SortLexicographic()
+	case SortRatingKinopoisk:
+		films.SortKinopoisk()
+	case SortRatingImdb:
+		films.SortIMDB()
+	case SortRatingHalva:
+		films.SortHalva()
+	case SortRatingSum:
+		films.SortSum()
+	case SortRatingAverage:
+		films.SortAverage()
+	case SortRatingScoreNumber:
+		films.SortScoreNumber()
+	default:
+		if sort == h.defaultSort {
+			return
+		}
+		h.sortFilms(films, h.defaultSort)
+	}
 }
 
 func build(film *pfilm.Item, userID string) *filmResponse {

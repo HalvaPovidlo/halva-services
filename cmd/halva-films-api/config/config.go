@@ -18,6 +18,7 @@ type GeneralConfig struct {
 	Kinopoisk string
 	Port      string `yaml:"port" split_words:"true"`
 	Secret    string `yaml:"secret" split_words:"true"`
+	Sort      string
 	Level     zapcore.Level
 }
 

@@ -15,7 +15,11 @@ var (
 )
 
 func NewClient(token string) {
-	State = state.NewWithIntents("Bot "+token, gateway.IntentGuilds, gateway.IntentGuildVoiceStates)
+	State = state.NewWithIntents("Bot "+token,
+		gateway.IntentGuilds,
+		gateway.IntentGuildMessages,
+		gateway.IntentGuildVoiceStates,
+		gateway.IntentDirectMessages)
 	return
 }
 

@@ -29,7 +29,7 @@ const (
 type Service struct {
 	session   *voice.Session
 	workChan  chan struct{}
-	finished  chan struct{}
+	finished  chan string
 	songTicks chan time.Duration
 	cancel    context.CancelFunc
 }
@@ -52,7 +52,7 @@ func New(ctx context.Context, channelID discord.ChannelID) (*Service, error) {
 	return &Service{
 		session:   session,
 		workChan:  make(chan struct{}, 1),
-		finished:  make(chan struct{}),
+		finished:  make(chan string),
 		songTicks: make(chan time.Duration),
 	}, nil
 }
@@ -63,11 +63,11 @@ func (s *Service) Play(ctx context.Context, source string, position time.Duratio
 		go func() {
 			defer func() {
 				s.cancel = nil
-				s.finished <- struct{}{}
+				s.finished <- source
 				<-s.workChan
 			}()
 			ctx, cancel := context.WithCancel(ctx)
-			logger := contexts.GetLogger(ctx)
+			logger := contexts.GetLogger(ctx).With(zap.String("source", source))
 			s.cancel = cancel
 
 			ffmpeg, stdout, stderr, err := ffmpegStart(ctx, source, position)
@@ -88,7 +88,7 @@ func (s *Service) Play(ctx context.Context, source string, position time.Duratio
 				return
 			}
 
-			if err := ffmpeg.Wait(); err != nil {
+			if err, ctxErr := ffmpeg.Wait(), ctx.Err(); err != nil && ctxErr != context.Canceled {
 				logger.Error("ffmpeg finished", zap.Error(err))
 			}
 		}()
@@ -104,16 +104,19 @@ func (s *Service) Stop() {
 	}
 }
 
-func (s *Service) Finished() <-chan struct{} {
+func (s *Service) Finished() <-chan string {
 	return s.finished
 }
 
-func (s *Service) DestroyIdle() {
+func (s *Service) DestroyIdle() bool {
 	select {
 	case s.workChan <- struct{}{}:
 		s.session.Leave(context.Background())
 		close(s.finished)
 		close(s.workChan)
+		return true
+	default:
+		return false
 	}
 }
 

@@ -27,6 +27,7 @@ cmd/test
 yandex_cloud
 yandex_cloud.pub
 halvabot-firebase.json
+halvabot-google.json
 
 # Go workspace file
 go.work

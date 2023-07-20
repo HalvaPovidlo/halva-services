@@ -4,8 +4,10 @@ import (
 	"time"
 )
 
+type IDType string
+
 type Item struct {
-	ID        string    `firestore:"-" json:"id"`
+	ID        IDType    `firestore:"-" json:"id"`
 	Title     string    `firestore:"title" json:"title,omitempty"`
 	LastPlay  time.Time `firestore:"last_play" json:"last_play,omitempty"`
 	Count     int64     `firestore:"playbacks" json:"playbacks,omitempty"`
@@ -17,4 +19,8 @@ type Item struct {
 	Thumbnail string    `firestore:"thumbnail_url,omitempty" json:"thumbnail_url,omitempty"`
 
 	FilePath string
+}
+
+func ID(songID string, service string) IDType {
+	return IDType(service + "_" + songID)
 }

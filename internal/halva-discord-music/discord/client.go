@@ -6,6 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/voice"
 )
 
 var (
@@ -20,6 +21,7 @@ func NewClient(token string) {
 		gateway.IntentGuildMessages,
 		gateway.IntentGuildVoiceStates,
 		gateway.IntentDirectMessages)
+	voice.AddIntents(State)
 	return
 }
 

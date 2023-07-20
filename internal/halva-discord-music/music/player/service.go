@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/audio"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/search"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
 
@@ -29,12 +30,12 @@ type AudioService interface {
 }
 
 type Downloader interface {
-	Download(*psong.Item) (*psong.Item, error)
+	Download(url string) (*psong.Item, error)
 	Delete(path string) error
 }
 
 type Searcher interface {
-	Find(ctx context.Context, request *SongRequest) (*psong.Item, error)
+	Search(ctx context.Context, request *search.SongRequest) (*psong.Item, error)
 	Radio(ctx context.Context) (*psong.Item, error)
 }
 
@@ -115,7 +116,8 @@ func (s *Service) processCommands(ctx context.Context) {
 		select {
 		case cmd := <-s.commands:
 			ctx, logger := cmd.ContextLogger(ctx)
-			if cmd.t != commandSendState {
+			// ignore spam
+			if !(cmd.t == commandSendState || (cmd.t == commandDisconnectIdle && s.audio == nil)) {
 				logger.Info("process command")
 			}
 			switch cmd.t {
@@ -127,7 +129,7 @@ func (s *Service) processCommands(ctx context.Context) {
 					s.audio.Stop()
 				}
 			case commandEnqueue:
-				song, err := s.searcher.Find(ctx, cmd.song)
+				song, err := s.searcher.Search(ctx, cmd.songRequest)
 				if err != nil {
 					s.error(logger, err)
 					break
@@ -198,7 +200,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		return nil
 	}
 
-	song, err = s.downloader.Download(song)
+	song, err = s.downloader.Download(song.URL)
 	if err != nil {
 		return fmt.Errorf("download song: %+w", err)
 	}

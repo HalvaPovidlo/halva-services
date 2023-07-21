@@ -28,6 +28,7 @@ yandex_cloud
 yandex_cloud.pub
 halvabot-firebase.json
 halvabot-google.json
+yt-dlp
 
 # Go workspace file
 go.work

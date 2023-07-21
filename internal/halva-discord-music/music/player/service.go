@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/audio"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/search"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
@@ -25,17 +26,18 @@ type AudioService interface {
 	Stop()
 	Destroy()
 	DestroyIdle() bool
+	Idle() bool
 	Finished() <-chan string
 	SongPosition() <-chan time.Duration
 }
 
 type Downloader interface {
-	Download(url string) (*psong.Item, error)
-	Delete(path string) error
+	Download(ctx context.Context, r *download.Request) (string, error)
+	Delete(r *download.Request) error
 }
 
 type Searcher interface {
-	Search(ctx context.Context, request *search.SongRequest) (*psong.Item, error)
+	Search(ctx context.Context, request *search.Request) (*psong.Item, error)
 	Radio(ctx context.Context) (*psong.Item, error)
 }
 
@@ -116,64 +118,73 @@ func (s *Service) processCommands(ctx context.Context) {
 		select {
 		case cmd := <-s.commands:
 			ctx, logger := cmd.ContextLogger(ctx)
-			// ignore spam
-			if !(cmd.t == commandSendState || (cmd.t == commandDisconnectIdle && s.audio == nil)) {
-				logger.Info("process command")
-			}
-			switch cmd.t {
-			case commandPlay:
-				s.error(logger, s.play(ctx, cmd.voiceChannel))
-			case commandSkip:
-				s.playlist.LoopDisable()
-				if s.audio != nil {
-					s.audio.Stop()
-				}
-			case commandEnqueue:
-				song, err := s.searcher.Search(ctx, cmd.songRequest)
-				if err != nil {
-					s.error(logger, err)
-					break
-				}
-				s.playlist.Add(song)
-			case commandRadio:
-				s.state.Radio = true
-			case commandRadioOff:
-				s.state.Radio = false
-			case commandLoop:
-				s.state.Loop = true
-				s.playlist.Loop()
-			case commandLoopOff:
-				s.state.Loop = false
-				s.playlist.LoopDisable()
-			case commandShuffle:
-				//s.state.Shuffle = true
-				s.playlist.Shuffle()
-			case commandShuffleOff:
-				//s.state.Shuffle = false
-				s.playlist.ShuffleDisable()
-			case commandDeleteSong:
-				s.error(logger, s.downloader.Delete(cmd.path))
-			case commandSendState:
-				s.posMx.Lock()
-				s.state.Position = s.songPosition
-				s.posMx.Unlock()
-
-				s.state.Queue = s.playlist.Queue()
-				go func() { s.states <- s.state }()
-			case commandDisconnectIdle:
-				if s.audio != nil && s.audio.DestroyIdle() {
-					s.audio = nil
-				}
-			case commandDisconnect:
-				if s.audio != nil {
-					s.audio.Destroy()
-					s.audio = nil
-				}
-			}
+			s.error(logger, s.processCommand(cmd, ctx, logger))
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func (s *Service) processCommand(cmd *playerCommand, ctx context.Context, logger *zap.Logger) error {
+	// ignore spam
+	if !(cmd.t == commandSendState || cmd.t == commandDisconnectIdle) {
+		logger.Info("process command")
+	}
+	switch cmd.t {
+	case commandPlay:
+		return s.play(ctx, cmd.voiceChannel)
+	case commandSkip:
+		s.playlist.LoopDisable()
+		if s.audio != nil {
+			s.audio.Stop()
+		}
+	case commandEnqueue:
+		song, err := s.searcher.Search(ctx, cmd.searchRequest)
+		if err != nil {
+			return fmt.Errorf("search song", err)
+		}
+		s.playlist.Add(song)
+
+		if s.audio == nil && cmd.voiceChannel != discord.NullChannelID {
+			go func() { s.commands <- cmdPlay(cmd.voiceChannel, cmd.traceID) }()
+		}
+	case commandRadio:
+		s.state.Radio = true
+	case commandRadioOff:
+		s.state.Radio = false
+	case commandLoop:
+		s.state.Loop = true
+		s.playlist.Loop()
+	case commandLoopOff:
+		s.state.Loop = false
+		s.playlist.LoopDisable()
+	case commandShuffle:
+		//s.state.Shuffle = true
+		s.playlist.Shuffle()
+	case commandShuffleOff:
+		//s.state.Shuffle = false
+		s.playlist.ShuffleDisable()
+	case commandDeleteSong:
+		s.error(logger, s.downloader.Delete(cmd.downloadRequest))
+	case commandSendState:
+		s.posMx.Lock()
+		s.state.Position = s.songPosition
+		s.posMx.Unlock()
+
+		s.state.Queue = s.playlist.Queue()
+		go func() { s.states <- s.state }()
+	case commandDisconnectIdle:
+		if s.audio != nil && s.audio.DestroyIdle() {
+			logger.Info("process command")
+			s.audio = nil
+		}
+	case commandDisconnect:
+		if s.audio != nil {
+			s.audio.Destroy()
+			s.audio = nil
+		}
+	}
+	return nil
 }
 
 func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) error {
@@ -189,6 +200,10 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		go s.listenAudioInstance(s.ctx)
 	}
 
+	if !s.audio.Idle() {
+		return nil
+	}
+
 	song := s.playlist.Peek()
 	if song == nil {
 		if s.state.Radio {
@@ -200,7 +215,11 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		return nil
 	}
 
-	song, err = s.downloader.Download(song.URL)
+	song.FilePath, err = s.downloader.Download(ctx, &download.Request{
+		ID:      string(song.ID),
+		Source:  song.URL,
+		Service: psong.ServiceType(song.Service),
+	})
 	if err != nil {
 		return fmt.Errorf("download song: %+w", err)
 	}
@@ -224,7 +243,9 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
 			s.commands <- &playerCommand{t: commandPlay}
-			s.commands <- &playerCommand{t: commandDeleteSong, path: source}
+			s.commands <- &playerCommand{t: commandDeleteSong, downloadRequest: &download.Request{
+				Source: source,
+			}}
 
 			s.posMx.Lock()
 			s.songPosition = 0

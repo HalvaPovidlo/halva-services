@@ -8,7 +8,9 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/search"
+	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
@@ -30,72 +32,79 @@ const (
 )
 
 type playerCommand struct {
-	t            int
-	path         string
-	songRequest  *search.SongRequest
-	voiceChannel discord.ChannelID
+	t               int
+	downloadRequest *download.Request
+	searchRequest   *search.Request
+	voiceChannel    discord.ChannelID
 
 	traceID string
 }
 
-func command(t int, song *search.SongRequest, path string, voice discord.ChannelID, traceID string) *playerCommand {
+func command(t int, song *search.Request, download *download.Request, voice discord.ChannelID, traceID string) *playerCommand {
 	if traceID == "" {
 		traceID = uuid.New().String()
 	}
 
 	return &playerCommand{
-		t:            t,
-		songRequest:  song,
-		path:         path,
-		voiceChannel: voice,
+		t:               t,
+		searchRequest:   song,
+		downloadRequest: download,
+		voiceChannel:    voice,
 	}
 }
 
-func CmdPlay(voiceChannel discord.ChannelID, traceID string) *playerCommand {
-	return command(commandPlay, nil, "", voiceChannel, traceID)
+func cmdPlay(voiceChannel discord.ChannelID, traceID string) *playerCommand {
+	return command(commandPlay, nil, nil, voiceChannel, traceID)
 }
 
 func CmdSkip(traceID string) *playerCommand {
-	return command(commandSkip, nil, "", 0, traceID)
+	return command(commandSkip, nil, nil, 0, traceID)
 }
 
-func CmdEnqueue(query string, service search.ServiceType, traceID string) *playerCommand {
-	return command(commandEnqueue, &search.SongRequest{
+func CmdEnqueuePlay(query string, service psong.ServiceType, voiceChannel discord.ChannelID, traceID string) *playerCommand {
+	return command(commandEnqueue, &search.Request{
 		Text:    query,
 		Service: service,
-	}, "", 0, traceID)
+	}, nil, voiceChannel, traceID)
+}
+
+func CmdEnqueue(query string, service psong.ServiceType, traceID string) *playerCommand {
+	return command(commandEnqueue, &search.Request{
+		Text:    query,
+		Service: service,
+	}, nil, discord.NullChannelID, traceID)
 }
 
 func CmdLoop(traceID string) *playerCommand {
-	return command(commandLoop, nil, "", 0, traceID)
+	return command(commandLoop, nil, nil, discord.NullChannelID, traceID)
 
 }
 
 func CmdLoopOff(traceID string) *playerCommand {
-	return command(commandLoopOff, nil, "", 0, traceID)
+	return command(commandLoopOff, nil, nil, discord.NullChannelID, traceID)
 
 }
 
 func CmdRadio(traceID string) *playerCommand {
-	return command(commandRadio, nil, "", 0, traceID)
+	return command(commandRadio, nil, nil, discord.NullChannelID, traceID)
 
 }
 
 func CmdRadioOff(traceID string) *playerCommand {
-	return command(commandRadioOff, nil, "", 0, traceID)
+	return command(commandRadioOff, nil, nil, discord.NullChannelID, traceID)
 
 }
 
 func CmdShuffle(traceID string) *playerCommand {
-	return command(commandShuffle, nil, "", 0, traceID)
+	return command(commandShuffle, nil, nil, discord.NullChannelID, traceID)
 }
 
 func CmdShuffleOff(traceID string) *playerCommand {
-	return command(commandShuffleOff, nil, "", 0, traceID)
+	return command(commandShuffleOff, nil, nil, discord.NullChannelID, traceID)
 }
 
 func CmdDisconnect(traceID string) *playerCommand {
-	return command(commandDisconnect, nil, "", 0, traceID)
+	return command(commandDisconnect, nil, nil, discord.NullChannelID, traceID)
 }
 
 func (c *playerCommand) String() string {
@@ -134,12 +143,12 @@ func (c *playerCommand) ContextLogger(ctx context.Context) (context.Context, *za
 	fields := []zap.Field{
 		zap.Stringer("command", c),
 	}
-	if c.path != "" {
-		fields = append(fields, zap.String("songPath", c.path))
+	if c.downloadRequest != nil {
+		fields = append(fields, zap.String("songPath", c.downloadRequest.Source))
 	}
-	if c.songRequest != nil {
+	if c.searchRequest != nil {
 		fields = append(fields,
-			zap.String("search.SongRequest", string(c.songRequest.Service)+"_"+c.songRequest.Text),
+			zap.String("search.Request", string(c.searchRequest.Service)+"_"+c.searchRequest.Text),
 		)
 	}
 	logger := contexts.GetLogger(ctx).With(fields...)

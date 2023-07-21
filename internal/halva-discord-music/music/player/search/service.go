@@ -13,13 +13,6 @@ import (
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
 
-type ServiceType string
-
-const (
-	ServiceYoutube ServiceType = "youtube"
-	ServiceVK      ServiceType = "vk"
-)
-
 var (
 	ErrSongNotFound   = fmt.Errorf("song not found")
 	ErrServiceUnknown = fmt.Errorf("service unknown")
@@ -31,9 +24,9 @@ type storage interface {
 	Add(ctx context.Context, song *psong.Item) error
 }
 
-type SongRequest struct {
+type Request struct {
 	Text    string
-	Service ServiceType
+	Service psong.ServiceType
 }
 
 type service struct {
@@ -52,20 +45,20 @@ func New(ctx context.Context, credentials string, storage storage) (*service, er
 	}, nil
 }
 
-func (s *service) Search(ctx context.Context, request *SongRequest) (*psong.Item, error) {
+func (s *service) Search(ctx context.Context, request *Request) (*psong.Item, error) {
 	switch request.Service {
-	case ServiceYoutube:
+	case psong.ServiceYoutube:
 		return s.searchYoutube(ctx, request)
-	case ServiceVK:
+	case psong.ServiceVK:
 		return nil, ErrServiceUnknown
 	default:
 		return nil, ErrServiceUnknown
 	}
 }
 
-func (s *service) searchYoutube(ctx context.Context, request *SongRequest) (*psong.Item, error) {
+func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.Item, error) {
 	if id := extractYoutubeID(request.Text); id != "" {
-		song, err := s.storage.Get(ctx, psong.ID(id, string(ServiceYoutube)))
+		song, err := s.storage.Get(ctx, psong.ID(id, psong.ServiceYoutube))
 		switch {
 		case err == nil:
 			song.Count++

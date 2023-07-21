@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"google.golang.org/api/option"
-
 	"google.golang.org/api/youtube/v3"
+
+	"github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
 
 const (
 	videoPrefix   = "https://youtube.com/watch?v="
 	channelPrefix = "https://youtube.com/channel/"
 	videoKind     = "youtube#video"
-	videoFormat   = ".m4a"
 	videoType     = "audio/mp4"
 	maxResult     = 10
 )
@@ -44,12 +43,12 @@ func (y *youtubeService) search(ctx context.Context, query string) (*song.Item, 
 		if resp.Id.Kind == videoKind {
 			art, thumb := getImages(resp.Snippet.Thumbnails)
 			return &song.Item{
-				ID:        song.ID(resp.Id.VideoId, string(ServiceYoutube)),
+				ID:        song.ID(resp.Id.VideoId, song.ServiceYoutube),
 				Title:     resp.Snippet.Title,
 				LastPlay:  time.Now(),
 				Count:     1,
 				URL:       videoPrefix + resp.Id.VideoId,
-				Service:   string(ServiceYoutube),
+				Service:   string(song.ServiceYoutube),
 				Artist:    resp.Snippet.ChannelTitle,
 				ArtistURL: channelPrefix + resp.Snippet.ChannelId,
 				Artwork:   art,

@@ -4,6 +4,13 @@ import (
 	"time"
 )
 
+type ServiceType string
+
+const (
+	ServiceYoutube ServiceType = "youtube"
+	ServiceVK      ServiceType = "vk"
+)
+
 type IDType string
 
 type Item struct {
@@ -21,6 +28,6 @@ type Item struct {
 	FilePath string
 }
 
-func ID(songID string, service string) IDType {
-	return IDType(service + "_" + songID)
+func ID(songID string, service ServiceType) IDType {
+	return IDType(string(service) + "_" + songID)
 }

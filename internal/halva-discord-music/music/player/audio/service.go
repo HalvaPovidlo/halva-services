@@ -120,6 +120,16 @@ func (s *Service) DestroyIdle() bool {
 	}
 }
 
+func (s *Service) Idle() bool {
+	select {
+	case s.workChan <- struct{}{}:
+		<-s.workChan
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Service) Destroy() {
 	s.cancel()
 	for {

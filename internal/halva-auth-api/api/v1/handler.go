@@ -38,6 +38,7 @@ type loginService interface {
 
 type userService interface {
 	Upsert(ctx context.Context, id, username, avatar string) error
+	Get(ctx context.Context, id string) (*user.Item, error)
 	All(ctx context.Context) (user.Items, error)
 }
 
@@ -63,7 +64,7 @@ func New(host, port, web string, login loginService, user userService, jwtServic
 
 func (h *handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/login", h.login)
-	e.POST("/api/v1/refresh", h.refresh, h.jwt.Authorization)
+	e.POST("/api/v1/refresh", h.refresh)
 	e.POST("/api/v1/logout", h.logout, h.jwt.Authorization)
 	e.GET("/api/v1/users", h.users, h.jwt.Authorization)
 	e.GET(callbackPath, h.callback)
@@ -96,9 +97,9 @@ func (h *handler) logout(c echo.Context) error {
 }
 
 func (h *handler) refresh(c echo.Context) error {
-	userID, err := h.jwt.ExtractUserID(c)
-	if err != nil {
-		return err
+	userID := c.QueryParam("id")
+	if userID == "" {
+		return c.String(http.StatusBadRequest, "UserID is empty")
 	}
 
 	refresh := c.QueryParam("refresh")
@@ -114,6 +115,11 @@ func (h *handler) refresh(c echo.Context) error {
 		return err
 	}
 
+	u, err := h.user.Get(c.Request().Context(), userID)
+	if err != nil {
+		return err
+	}
+
 	accessToken, err := h.jwt.Generate(userID)
 	if err != nil {
 		return err
@@ -121,8 +127,11 @@ func (h *handler) refresh(c echo.Context) error {
 
 	resp := loginResponse{
 		Token:        accessToken,
-		Expiration:   time.Now().Add(jwt.TokenTTL),
+		ID:           userID,
+		Username:     u.Username,
+		Avatar:       u.Avatar,
 		RefreshToken: newToken,
+		Expiration:   time.Now().Add(jwt.TokenTTL),
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -170,6 +179,7 @@ func (h *handler) callback(c echo.Context) error {
 
 	resp := loginResponse{
 		Token:        accessToken,
+		ID:           userID,
 		Username:     username,
 		Avatar:       avatar,
 		Expiration:   time.Now().Add(jwt.TokenTTL),
@@ -180,14 +190,15 @@ func (h *handler) callback(c echo.Context) error {
 
 type loginResponse struct {
 	Token        string    `json:"token"`
-	Expiration   time.Time `json:"expiration"`
-	RefreshToken string    `json:"refresh_token"`
+	ID           string    `json:"id,omitempty"`
 	Username     string    `json:"username,omitempty"`
 	Avatar       string    `json:"avatar,omitempty"`
+	RefreshToken string    `json:"refresh_token"`
+	Expiration   time.Time `json:"expiration"`
 }
 
 func (r *loginResponse) query() string {
-	return fmt.Sprintf("?token=%s&username=%s&avatar=%s&refresh_token=%s&expiration=%s", r.Token, r.Username, r.Avatar, r.RefreshToken, r.Expiration.String())
+	return fmt.Sprintf("?token=%s&id=%s&username=%s&avatar=%s&refresh_token=%s&expiration=%s", r.Token, r.ID, r.Username, r.Avatar, r.RefreshToken, r.Expiration.String())
 }
 
 type userResponse struct {

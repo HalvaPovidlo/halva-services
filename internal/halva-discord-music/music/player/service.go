@@ -10,9 +10,9 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"go.uber.org/zap"
 
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/audio"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/download"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/search"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
 
@@ -68,7 +68,7 @@ type Service struct {
 	searcher   Searcher
 
 	state           State
-	commands        chan *playerCommand
+	commands        chan *Command
 	states          chan State
 	autoLeaveTicker *time.Ticker
 
@@ -88,7 +88,7 @@ func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, s
 		downloader: downloader,
 		searcher:   searcher,
 
-		commands:        make(chan *playerCommand),
+		commands:        make(chan *Command),
 		states:          make(chan State),
 		autoLeaveTicker: time.NewTicker(autoLeaveDuration),
 
@@ -104,12 +104,18 @@ func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, s
 	return player
 }
 
-func (s *Service) Input() chan<- *playerCommand {
+func (s *Service) Input() chan<- *Command {
 	return s.commands
 }
 
 func (s *Service) Status() <-chan State {
 	return s.states
+}
+
+func (s *Service) SubscribeOnErrors(h ErrorHandler) {
+	go func() {
+		s.errorHandlers <- h
+	}()
 }
 
 func (s *Service) processCommands(ctx context.Context) {
@@ -125,7 +131,7 @@ func (s *Service) processCommands(ctx context.Context) {
 	}
 }
 
-func (s *Service) processCommand(cmd *playerCommand, ctx context.Context, logger *zap.Logger) error {
+func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.Logger) error {
 	// ignore spam
 	if !(cmd.t == commandSendState || cmd.t == commandDisconnectIdle) {
 		logger.Info("process command")
@@ -242,8 +248,8 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 				return
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
-			s.commands <- &playerCommand{t: commandPlay}
-			s.commands <- &playerCommand{t: commandDeleteSong, downloadRequest: &download.Request{
+			s.commands <- &Command{t: commandPlay}
+			s.commands <- &Command{t: commandDeleteSong, downloadRequest: &download.Request{
 				Source: source,
 			}}
 
@@ -269,19 +275,13 @@ func (s *Service) processOther(ctx context.Context, duration time.Duration) {
 	for {
 		select {
 		case <-t.C:
-			s.commands <- &playerCommand{t: commandSendState}
+			s.commands <- &Command{t: commandSendState}
 		case <-s.autoLeaveTicker.C:
-			s.commands <- &playerCommand{t: commandDisconnectIdle}
+			s.commands <- &Command{t: commandDisconnectIdle}
 		case <-ctx.Done():
 			return
 		}
 	}
-}
-
-func (s *Service) SubscribeOnErrors(h ErrorHandler) {
-	go func() {
-		s.errorHandlers <- h
-	}()
 }
 
 func (s *Service) error(logger *zap.Logger, err error) {

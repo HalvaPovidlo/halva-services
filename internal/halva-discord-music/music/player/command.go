@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/download"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/search"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
@@ -31,7 +31,7 @@ const (
 	commandDisconnectIdle
 )
 
-type playerCommand struct {
+type Command struct {
 	t               int
 	downloadRequest *download.Request
 	searchRequest   *search.Request
@@ -40,12 +40,12 @@ type playerCommand struct {
 	traceID string
 }
 
-func command(t int, song *search.Request, download *download.Request, voice discord.ChannelID, traceID string) *playerCommand {
+func command(t int, song *search.Request, download *download.Request, voice discord.ChannelID, traceID string) *Command {
 	if traceID == "" {
 		traceID = uuid.New().String()
 	}
 
-	return &playerCommand{
+	return &Command{
 		t:               t,
 		searchRequest:   song,
 		downloadRequest: download,
@@ -53,61 +53,61 @@ func command(t int, song *search.Request, download *download.Request, voice disc
 	}
 }
 
-func cmdPlay(voiceChannel discord.ChannelID, traceID string) *playerCommand {
+func cmdPlay(voiceChannel discord.ChannelID, traceID string) *Command {
 	return command(commandPlay, nil, nil, voiceChannel, traceID)
 }
 
-func CmdSkip(traceID string) *playerCommand {
+func CmdSkip(traceID string) *Command {
 	return command(commandSkip, nil, nil, 0, traceID)
 }
 
-func CmdEnqueuePlay(query string, service psong.ServiceType, voiceChannel discord.ChannelID, traceID string) *playerCommand {
+func CmdEnqueuePlay(query string, service psong.ServiceType, voiceChannel discord.ChannelID, traceID string) *Command {
 	return command(commandEnqueue, &search.Request{
 		Text:    query,
 		Service: service,
 	}, nil, voiceChannel, traceID)
 }
 
-func CmdEnqueue(query string, service psong.ServiceType, traceID string) *playerCommand {
+func CmdEnqueue(query string, service psong.ServiceType, traceID string) *Command {
 	return command(commandEnqueue, &search.Request{
 		Text:    query,
 		Service: service,
 	}, nil, discord.NullChannelID, traceID)
 }
 
-func CmdLoop(traceID string) *playerCommand {
+func CmdLoop(traceID string) *Command {
 	return command(commandLoop, nil, nil, discord.NullChannelID, traceID)
 
 }
 
-func CmdLoopOff(traceID string) *playerCommand {
+func CmdLoopOff(traceID string) *Command {
 	return command(commandLoopOff, nil, nil, discord.NullChannelID, traceID)
 
 }
 
-func CmdRadio(traceID string) *playerCommand {
+func CmdRadio(traceID string) *Command {
 	return command(commandRadio, nil, nil, discord.NullChannelID, traceID)
 
 }
 
-func CmdRadioOff(traceID string) *playerCommand {
+func CmdRadioOff(traceID string) *Command {
 	return command(commandRadioOff, nil, nil, discord.NullChannelID, traceID)
 
 }
 
-func CmdShuffle(traceID string) *playerCommand {
+func CmdShuffle(traceID string) *Command {
 	return command(commandShuffle, nil, nil, discord.NullChannelID, traceID)
 }
 
-func CmdShuffleOff(traceID string) *playerCommand {
+func CmdShuffleOff(traceID string) *Command {
 	return command(commandShuffleOff, nil, nil, discord.NullChannelID, traceID)
 }
 
-func CmdDisconnect(traceID string) *playerCommand {
+func CmdDisconnect(traceID string) *Command {
 	return command(commandDisconnect, nil, nil, discord.NullChannelID, traceID)
 }
 
-func (c *playerCommand) String() string {
+func (c *Command) String() string {
 	switch c.t {
 	case commandPlay:
 		return "play"
@@ -139,7 +139,7 @@ func (c *playerCommand) String() string {
 	return "UNKNOWN" + strconv.Itoa(c.t)
 }
 
-func (c *playerCommand) ContextLogger(ctx context.Context) (context.Context, *zap.Logger) {
+func (c *Command) ContextLogger(ctx context.Context) (context.Context, *zap.Logger) {
 	fields := []zap.Field{
 		zap.Stringer("command", c),
 	}

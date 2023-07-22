@@ -9,6 +9,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/voice"
 )
 
+const HalvaGuildID = discord.GuildID(623964456929591297)
+
 var (
 	State *state.State
 	Self  *discord.User

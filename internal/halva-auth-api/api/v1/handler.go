@@ -78,7 +78,7 @@ func (h *handler) login(c echo.Context) error {
 func (h *handler) logout(c echo.Context) error {
 	userID, err := h.jwt.ExtractUserID(c)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
+		return c.String(http.StatusUnauthorized, err.Error())
 	}
 
 	refresh := c.QueryParam("refresh")

@@ -5,13 +5,22 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	pcache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/cmd/halva-discord-music/config"
 	apiv1 "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/firestore"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/playlist"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 	"github.com/HalvaPovidlo/halva-services/pkg/echos"
+	fire "github.com/HalvaPovidlo/halva-services/pkg/firestore"
+	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
 	"github.com/HalvaPovidlo/halva-services/pkg/log"
 	"github.com/HalvaPovidlo/halva-services/pkg/socket"
 )
@@ -26,7 +35,28 @@ func main() {
 	logger := log.NewLogger(cfg.General.Debug)
 	ctx := contexts.WithLogger(context.Background(), logger)
 
-	handler := apiv1.New(socket.NewManager(ctx))
+	fireClient, err := fire.New(ctx, "halvabot-firebase.json")
+	if err != nil {
+		logger.Fatal("failed to init firestore client", zap.Error(err))
+	}
+
+	searcher, err := search.New(
+		ctx,
+		"halvabot-google.json",
+		firestore.New(firestore.NewStorage(fireClient), firestore.NewCache(pcache.NoExpiration, pcache.NoExpiration)),
+	)
+	if err != nil {
+		logger.Fatal("failed to init searcher", zap.Error(err))
+	}
+
+	downloader, err := download.New("songs")
+	if err != nil {
+		logger.Fatal("failed to init downloader", zap.Error(err))
+	}
+
+	musicPlayer := player.New(ctx, playlist.New(), downloader, searcher, time.Duration(cfg.General.StateTicks)*time.Millisecond)
+
+	handler := apiv1.New(musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)

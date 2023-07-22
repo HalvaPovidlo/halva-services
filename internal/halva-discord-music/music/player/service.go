@@ -38,7 +38,7 @@ type Downloader interface {
 
 type Searcher interface {
 	Search(ctx context.Context, request *search.Request) (*psong.Item, error)
-	Radio(ctx context.Context) (*psong.Item, error)
+	Radio() (*psong.Item, error)
 }
 
 type PlaylistManager interface {
@@ -68,6 +68,7 @@ type Service struct {
 	searcher   Searcher
 
 	state           State
+	currentVoice    discord.ChannelID
 	commands        chan *Command
 	states          chan State
 	autoLeaveTicker *time.Ticker
@@ -133,41 +134,49 @@ func (s *Service) processCommands(ctx context.Context) {
 
 func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.Logger) error {
 	// ignore spam
-	if !(cmd.t == commandSendState || cmd.t == commandDisconnectIdle) {
+	if !(cmd.Type == commandSendState || cmd.Type == commandDisconnectIdle) {
 		logger.Info("process command")
 	}
-	switch cmd.t {
+	switch cmd.Type {
 	case commandPlay:
-		return s.play(ctx, cmd.voiceChannel)
-	case commandSkip:
+		return s.play(ctx, cmd.VoiceChannelID)
+	case CommandSkip:
 		s.playlist.LoopDisable()
 		if s.audio != nil {
 			s.audio.Stop()
 		}
-	case commandEnqueue:
-		song, err := s.searcher.Search(ctx, cmd.searchRequest)
+	case CommandEnqueue:
+		if s.audio != nil && cmd.VoiceChannelID != s.currentVoice {
+			return fmt.Errorf("audio connected to a different voice channel")
+		}
+
+		song, err := s.searcher.Search(ctx, cmd.SearchRequest)
 		if err != nil {
-			return fmt.Errorf("search song", err)
+			return fmt.Errorf("search song: %+w", err)
 		}
 		s.playlist.Add(song)
 
-		if s.audio == nil && cmd.voiceChannel != discord.NullChannelID {
-			go func() { s.commands <- cmdPlay(cmd.voiceChannel, cmd.traceID) }()
+		if s.audio == nil && cmd.VoiceChannelID != discord.NullChannelID {
+			cmd := *cmd
+			cmd.Type = commandPlay
+			go func() {
+				s.commands <- &cmd
+			}()
 		}
-	case commandRadio:
+	case CommandRadio:
 		s.state.Radio = true
-	case commandRadioOff:
+	case CommandRadioOff:
 		s.state.Radio = false
-	case commandLoop:
+	case CommandLoop:
 		s.state.Loop = true
 		s.playlist.Loop()
-	case commandLoopOff:
+	case CommandLoopOff:
 		s.state.Loop = false
 		s.playlist.LoopDisable()
-	case commandShuffle:
+	case CommandShuffle:
 		//s.state.Shuffle = true
 		s.playlist.Shuffle()
-	case commandShuffleOff:
+	case CommandShuffleOff:
 		//s.state.Shuffle = false
 		s.playlist.ShuffleDisable()
 	case commandDeleteSong:
@@ -178,16 +187,19 @@ func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.
 		s.posMx.Unlock()
 
 		s.state.Queue = s.playlist.Queue()
-		go func() { s.states <- s.state }()
+		s.states <- s.state
+		//go func() { s.states <- s.state }()
 	case commandDisconnectIdle:
 		if s.audio != nil && s.audio.DestroyIdle() {
 			logger.Info("process command")
 			s.audio = nil
+			s.currentVoice = discord.NullChannelID
 		}
-	case commandDisconnect:
+	case CommandDisconnect:
 		if s.audio != nil {
 			s.audio.Destroy()
 			s.audio = nil
+			s.currentVoice = discord.NullChannelID
 		}
 	}
 	return nil
@@ -203,6 +215,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		if err != nil {
 			return fmt.Errorf("create new audio session: %+w", err)
 		}
+		s.currentVoice = voiceChannel
 		go s.listenAudioInstance(s.ctx)
 	}
 
@@ -213,7 +226,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 	song := s.playlist.Peek()
 	if song == nil {
 		if s.state.Radio {
-			song, err = s.searcher.Radio(ctx)
+			song, err = s.searcher.Radio()
 			if err != nil {
 				return fmt.Errorf("get radio song: %+w", err)
 			}
@@ -248,8 +261,8 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 				return
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
-			s.commands <- &Command{t: commandPlay}
-			s.commands <- &Command{t: commandDeleteSong, downloadRequest: &download.Request{
+			s.commands <- &Command{Type: commandPlay}
+			s.commands <- &Command{Type: commandDeleteSong, downloadRequest: &download.Request{
 				Source: source,
 			}}
 
@@ -275,9 +288,9 @@ func (s *Service) processOther(ctx context.Context, duration time.Duration) {
 	for {
 		select {
 		case <-t.C:
-			s.commands <- &Command{t: commandSendState}
+			s.commands <- &Command{Type: commandSendState}
 		case <-s.autoLeaveTicker.C:
-			s.commands <- &Command{t: commandDisconnectIdle}
+			s.commands <- &Command{Type: commandDisconnectIdle}
 		case <-ctx.Done():
 			return
 		}

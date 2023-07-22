@@ -1,7 +1,10 @@
 package song
 
 import (
+	"fmt"
 	"time"
+
+	"cloud.google.com/go/firestore"
 )
 
 type ServiceType string
@@ -30,4 +33,13 @@ type Item struct {
 
 func ID(songID string, service ServiceType) IDType {
 	return IDType(string(service) + "_" + songID)
+}
+
+func Parse(doc *firestore.DocumentSnapshot) (*Item, error) {
+	var u Item
+	if err := doc.DataTo(&u); err != nil {
+		return nil, fmt.Errorf("unmarshall data: %+w", err)
+	}
+	u.ID = IDType(doc.Ref.ID)
+	return &u, nil
 }

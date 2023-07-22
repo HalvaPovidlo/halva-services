@@ -13,7 +13,7 @@ import (
 	fire "github.com/HalvaPovidlo/halva-services/pkg/firestore"
 )
 
-const approximateFilmsNumber = 512
+const approximateFilmsNumber = 256
 
 type storage struct {
 	*firestore.Client

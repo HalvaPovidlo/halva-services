@@ -14,9 +14,11 @@ type Config struct {
 }
 
 type GeneralConfig struct {
-	Debug bool
-	Port  string `yaml:"port" split_words:"true"`
-	Level zapcore.Level
+	Debug      bool
+	Port       string `yaml:"port" split_words:"true"`
+	Secret     string
+	StateTicks int `yaml:"state_ticks" split_words:"true"`
+	Level      zapcore.Level
 }
 
 func InitConfig(configPathEnv, envPrefix string) (Config, error) {

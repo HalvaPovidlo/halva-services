@@ -18,23 +18,24 @@ var (
 	ErrServiceUnknown = fmt.Errorf("service unknown")
 )
 
-type storage interface {
+type storageInterface interface {
 	Get(ctx context.Context, id psong.IDType) (*psong.Item, error)
-	GetAny(ctx context.Context) (*psong.Item, error)
-	Add(ctx context.Context, song *psong.Item) error
+	Set(ctx context.Context, userID string, song *psong.Item) error
+	GetAny() *psong.Item
 }
 
 type Request struct {
 	Text    string
+	userID  string
 	Service psong.ServiceType
 }
 
 type service struct {
 	youtube *youtubeService
-	storage storage
+	storage storageInterface
 }
 
-func New(ctx context.Context, credentials string, storage storage) (*service, error) {
+func New(ctx context.Context, credentials string, storage storageInterface) (*service, error) {
 	youtube, err := newYouTubeSearcher(ctx, credentials)
 	if err != nil {
 		return nil, err
@@ -63,7 +64,7 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 		case err == nil:
 			song.Count++
 			song.LastPlay = time.Now()
-			if err := s.storage.Add(ctx, song); err != nil {
+			if err := s.storage.Set(ctx, request.userID, song); err != nil {
 				return nil, fmt.Errorf("add song to storage: %+w", err)
 			}
 			return song, nil
@@ -79,19 +80,19 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 		return nil, fmt.Errorf("search song on youtube: %+w", err)
 	}
 
-	if err := s.storage.Add(ctx, song); err != nil {
+	if err := s.storage.Set(ctx, request.userID, song); err != nil {
 		return nil, fmt.Errorf("add song to storage: %+w", err)
 	}
 
 	return song, nil
 }
 
-func (s *service) Radio(ctx context.Context) (*psong.Item, error) {
-	song, err := s.storage.GetAny(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get any song from storage: %+w", err)
+func (s *service) Radio() (*psong.Item, error) {
+	song := s.storage.GetAny()
+	if song == nil {
+		return nil, fmt.Errorf("get any song from storage")
 	}
-	return song, err
+	return song, nil
 }
 
 func extractYoutubeID(url string) string {

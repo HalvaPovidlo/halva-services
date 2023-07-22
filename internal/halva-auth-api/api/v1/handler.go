@@ -78,7 +78,7 @@ func (h *handler) login(c echo.Context) error {
 func (h *handler) logout(c echo.Context) error {
 	userID, err := h.jwt.ExtractUserID(c)
 	if err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	refresh := c.QueryParam("refresh")
@@ -112,17 +112,17 @@ func (h *handler) refresh(c echo.Context) error {
 	case errors.Is(err, auth.ErrInvalidToken):
 		return c.String(http.StatusUnprocessableEntity, "Invalid refresh token")
 	case err != nil:
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	u, err := h.user.Get(c.Request().Context(), userID)
 	if err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	accessToken, err := h.jwt.Generate(userID)
 	if err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	resp := loginResponse{
@@ -140,7 +140,7 @@ func (h *handler) users(c echo.Context) error {
 	var users usersResponse
 	all, err := h.user.All(c.Request().Context())
 	if err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 	users.Users = make([]userResponse, 0, len(all))
 	for i := range all {
@@ -164,17 +164,17 @@ func (h *handler) callback(c echo.Context) error {
 			zap.String("id", userID), zap.String("username", username))
 		return c.String(http.StatusNotFound, "Unknown user, ask andrei.khodko@gmail.com to add")
 	case err != nil:
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	accessToken, err := h.jwt.Generate(userID)
 	if err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	avatar = discordAvatarURL + userID + "/" + avatar
 	if err := h.user.Upsert(ctx, userID, username, avatar); err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	resp := loginResponse{

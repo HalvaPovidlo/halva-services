@@ -164,6 +164,8 @@ func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logge
 	switch cmd.Type {
 	case commandPlay:
 		return true, s.play(ctx, cmd.VoiceChannelID)
+	case commandRemove:
+		s.playlist.Remove()
 	case commandDeleteSong:
 		if err := s.downloader.Delete(cmd.downloadRequest); err != nil {
 			return false, fmt.Errorf("delete song")
@@ -284,7 +286,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 	logger.Info("play song", zap.String("title", song.Title))
 	if s.audio.Play(ctx, song.FilePath, 0) {
 		s.state.Current = *song
-		s.playlist.Remove()
+		//s.playlist.Remove()
 	}
 
 	return nil
@@ -300,6 +302,7 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 				return
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
+			s.commands <- &Command{Type: commandRemove}
 			s.commands <- &Command{Type: commandPlay}
 			s.commands <- &Command{Type: commandDeleteSong, downloadRequest: &download.Request{
 				Source: source,

@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	commandPlay       = "play"
 	CommandSkip       = "skip"
 	CommandEnqueue    = "enqueue"
 	CommandLoop       = "loop"
@@ -22,6 +21,8 @@ const (
 	CommandShuffleOff = "shuffle_off"
 	CommandDisconnect = "disconnect"
 
+	commandPlay           = "play"
+	commandRemove         = "remove"
 	commandDeleteSong     = "delete"
 	commandSendState      = "state"
 	commandDisconnectIdle = "disconnect_idle"

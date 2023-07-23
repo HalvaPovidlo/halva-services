@@ -66,7 +66,7 @@ func main() {
 	echoServer.Run(cfg.General.Port, logger)
 
 	if err := pds.Connect(ctx); err != nil {
-		logger.Panic("failed to discord connect: ", zap.Error(err))
+		logger.Fatal("failed to discord connect: ", zap.Error(err))
 		return
 	}
 

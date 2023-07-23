@@ -43,11 +43,12 @@ func main() {
 		logger.Fatal("failed to init firestore client", zap.Error(err))
 	}
 
-	searcher, err := search.New(
-		ctx,
-		"halvabot-google.json",
-		firestore.New(firestore.NewStorage(fireClient), firestore.NewCache(pcache.NoExpiration, pcache.NoExpiration)),
-	)
+	fireStorage := firestore.New(firestore.NewStorage(fireClient), firestore.NewCache(pcache.NoExpiration, pcache.NoExpiration))
+	if err := fireStorage.FillCache(ctx); err != nil {
+		logger.Fatal("fill firestore cache", zap.Error(err))
+	}
+
+	searcher, err := search.New(ctx, "halvabot-google.json", fireStorage)
 	if err != nil {
 		logger.Fatal("failed to init searcher", zap.Error(err))
 	}
@@ -82,5 +83,6 @@ func main() {
 	if err := echoServer.Shutdown(ctx); err != nil {
 		logger.Error("failed echo server shutdown", zap.Error(err))
 	}
+	pds.Close()
 	logger.Info("stopped")
 }

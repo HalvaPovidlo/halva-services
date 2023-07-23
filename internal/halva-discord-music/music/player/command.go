@@ -41,6 +41,13 @@ type Command struct {
 func (c *Command) ContextLogger(ctx context.Context) (context.Context, *zap.Logger) {
 	fields := []zap.Field{
 		zap.String("command", c.Type),
+		zap.Stringer("voiceID", c.VoiceChannelID),
+	}
+	if c.UserID != discord.NullUserID {
+		fields = append(fields, zap.Stringer("userID", c.UserID))
+	}
+	if c.VoiceChannelID != discord.NullChannelID {
+		fields = append(fields, zap.Stringer("voiceID", c.VoiceChannelID))
 	}
 	if c.downloadRequest != nil {
 		fields = append(fields, zap.String("songPath", c.downloadRequest.Source))
@@ -51,5 +58,6 @@ func (c *Command) ContextLogger(ctx context.Context) (context.Context, *zap.Logg
 		)
 	}
 	logger := contexts.GetLogger(ctx).With(fields...)
-	return contexts.WithValues(ctx, logger, c.TraceID), logger
+	nctx := contexts.WithValues(ctx, logger, c.TraceID)
+	return nctx, contexts.GetLogger(nctx)
 }

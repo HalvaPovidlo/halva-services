@@ -50,7 +50,7 @@ type Player interface {
 }
 
 type Command struct {
-	Type    commandType      `json:"type,omitempty"`
+	Type    commandType      `json:"type"`
 	Query   string           `json:"query,omitempty"`
 	Service song.ServiceType `json:"service,omitempty"`
 	TraceID string           `json:"trace_id,omitempty"`
@@ -167,6 +167,8 @@ func (h *handler) processCommand(ctx context.Context, cmd *Command, userID disco
 		command.Type = player.CommandRadio
 	case CommandRadioOff:
 		command.Type = player.CommandRadioOff
+	default:
+		return fmt.Errorf("unknown command: %s", command.Type)
 	}
 	go func() { playerInput <- command }()
 	return nil

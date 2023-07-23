@@ -2,14 +2,13 @@ package search
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/firestore"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
 
@@ -21,7 +20,7 @@ var (
 type storageInterface interface {
 	Get(ctx context.Context, id psong.IDType) (*psong.Item, error)
 	Set(ctx context.Context, userID string, song *psong.Item) error
-	GetAny() *psong.Item
+	GetAny(minPlaybacks int64) *psong.Item
 }
 
 type Request struct {
@@ -68,9 +67,7 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 				return nil, fmt.Errorf("add song to storage: %+w", err)
 			}
 			return song, nil
-		case status.Code(err) == codes.NotFound:
-			// pass
-		case err != nil:
+		case err != nil && !errors.Is(err, firestore.ErrNotFound):
 			return nil, fmt.Errorf("get song from storage: %+w", err)
 		}
 	}
@@ -81,10 +78,12 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 	}
 
 	storageSong, err := s.storage.Get(ctx, song.ID)
-	if err != nil {
+	switch {
+	case err == nil:
+		song.Count = storageSong.Count + 1
+	case err != nil && !errors.Is(err, firestore.ErrNotFound):
 		return nil, fmt.Errorf("get song from storage: %+w", err)
 	}
-	song.Count = storageSong.Count + 1
 
 	if err := s.storage.Set(ctx, request.UserID, song); err != nil {
 		return nil, fmt.Errorf("add song to storage: %+w", err)
@@ -93,11 +92,15 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 	return song, nil
 }
 
-func (s *service) Radio() (*psong.Item, error) {
-	song := s.storage.GetAny()
+func (s *service) Radio(minPlaybacks int64) (*psong.Item, error) {
+	song := s.storage.GetAny(minPlaybacks)
 	if song == nil {
 		return nil, fmt.Errorf("get any song from storage")
 	}
+	if song.Service == "" {
+		song.Service = string(psong.ServiceYoutube)
+	}
+
 	return song, nil
 }
 

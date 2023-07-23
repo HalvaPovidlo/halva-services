@@ -15,7 +15,7 @@ type storageInterface interface {
 type cacheInterface interface {
 	Set(item *psong.Item)
 	Get(id psong.IDType) (*psong.Item, bool)
-	GetAny() *psong.Item
+	GetAny(minPlaybacks int64) *psong.Item
 }
 
 type service struct {
@@ -53,8 +53,8 @@ func (s *service) Set(ctx context.Context, userID string, item *psong.Item) erro
 	return nil
 }
 
-func (s *service) GetAny() *psong.Item {
-	return s.cache.GetAny()
+func (s *service) GetAny(minPlaybacks int64) *psong.Item {
+	return s.cache.GetAny(minPlaybacks)
 }
 
 func (s *service) FillCache(ctx context.Context) error {

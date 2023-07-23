@@ -28,7 +28,7 @@ type Item struct {
 	Artwork   string    `firestore:"artwork_url,omitempty" json:"artwork_url,omitempty"`
 	Thumbnail string    `firestore:"thumbnail_url,omitempty" json:"thumbnail_url,omitempty"`
 
-	FilePath string
+	FilePath string `firestore:"-" json:"-"`
 }
 
 func ID(songID string, service ServiceType) IDType {
@@ -42,7 +42,7 @@ func Parse(doc *firestore.DocumentSnapshot) (*Item, error) {
 			var old *oldSong
 			err = doc.DataTo(&old)
 			if err != nil {
-				return nil, fmt.Errorf("unmarshall data: %+w", err)
+				return nil, fmt.Errorf("unmarshall data docID=%s: %+w", doc.Ref.ID, err)
 			}
 			s = buildNewSong(old)
 		}

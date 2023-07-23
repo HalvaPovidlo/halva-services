@@ -13,7 +13,9 @@ import (
 	fire "github.com/HalvaPovidlo/halva-services/pkg/firestore"
 )
 
-const approximateSongsNumber = 512
+const approximateSongsNumber = 1024
+
+var ErrNotFound = fmt.Errorf("document not found")
 
 type storage struct {
 	*firestore.Client
@@ -27,6 +29,9 @@ func NewStorage(client *firestore.Client) *storage {
 
 func (s *storage) Get(ctx context.Context, id psong.IDType) (*psong.Item, error) {
 	doc, err := s.Collection(fire.SongsCollection).Doc(string(id)).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get song doc: %+w", err)
 	}
@@ -80,7 +85,7 @@ func (s *storage) Set(ctx context.Context, userID string, item *psong.Item) erro
 }
 
 func (s *storage) All(ctx context.Context) ([]psong.Item, error) {
-	songs := make([]psong.Item, 0)
+	songs := make([]psong.Item, 0, approximateSongsNumber)
 	iter := s.Collection(fire.SongsCollection).Documents(ctx)
 	for {
 		doc, err := iter.Next()

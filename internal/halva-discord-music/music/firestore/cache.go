@@ -36,22 +36,21 @@ func (c *cache) Get(id psong.IDType) (*psong.Item, bool) {
 	return nil, false
 }
 
-func (c *cache) GetAny() *psong.Item {
+func (c *cache) GetAny(minPlaybacks int64) *psong.Item {
 	if c.songs.ItemCount() == 0 {
 		return nil
 	}
 
 	items := c.songs.Items()
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-	k := r.Intn(len(items))
-	i := 0
+	songs := make([]psong.Item, 0, len(items))
 	for _, v := range items {
-		if i >= k {
-			if s, ok := v.Object.(psong.Item); ok {
-				return &s
+		if s, ok := v.Object.(psong.Item); ok {
+			if s.Count >= minPlaybacks {
+				songs = append(songs, s)
 			}
-			i++
 		}
 	}
-	return nil
+
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	return &songs[r.Intn(len(songs))]
 }

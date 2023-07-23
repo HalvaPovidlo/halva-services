@@ -6,15 +6,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/film"
 )
 
 var (
 	ErrAlreadyExists = errors.New("film already exists")
-	ErrNotFound      = errors.New("film not found")
 	ErrNoScore       = errors.New("film has no score from the user")
 )
 
@@ -207,10 +204,7 @@ func (s *service) User(ctx context.Context, userID string) (film.Items, error) {
 	filmsID, ok := s.cache.User(userID)
 	if !ok {
 		filmsID, err = s.storage.User(ctx, userID)
-		switch {
-		case status.Code(err) == codes.NotFound:
-			return nil, ErrNotFound
-		case err != nil:
+		if err != nil {
 			return nil, errors.Wrap(err, "get user films id from storage")
 		}
 	}

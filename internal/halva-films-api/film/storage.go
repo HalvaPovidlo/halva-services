@@ -7,6 +7,8 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/pkg/errors"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/film"
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/user"
@@ -14,6 +16,8 @@ import (
 )
 
 const approximateFilmsNumber = 256
+
+var ErrNotFound = errors.New("doc not found")
 
 type storage struct {
 	*firestore.Client
@@ -111,6 +115,9 @@ func (s *storage) All(ctx context.Context) (film.Items, error) {
 
 func (s *storage) User(ctx context.Context, userID string) ([]string, error) {
 	userDoc, err := s.Collection(fire.UsersCollection).Doc(userID).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "get user")
 	}

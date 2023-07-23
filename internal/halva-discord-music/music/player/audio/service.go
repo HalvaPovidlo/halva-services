@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,11 +27,17 @@ const (
 	timeIncrement = 2880
 )
 
+type SongPosition struct {
+	Elapsed time.Duration
+	Length  time.Duration
+}
+
 type Service struct {
 	session   *voice.Session
+	length    time.Duration
 	workChan  chan struct{}
 	finished  chan string
-	songTicks chan time.Duration
+	songTicks chan SongPosition
 	cancel    context.CancelFunc
 }
 
@@ -53,7 +60,7 @@ func New(ctx context.Context, channelID discord.ChannelID) (*Service, error) {
 		session:   session,
 		workChan:  make(chan struct{}, 1),
 		finished:  make(chan string),
-		songTicks: make(chan time.Duration),
+		songTicks: make(chan SongPosition),
 	}, nil
 }
 
@@ -63,12 +70,20 @@ func (s *Service) Play(ctx context.Context, source string, position time.Duratio
 		go func() {
 			defer func() {
 				s.cancel = nil
+				s.length = 0
 				s.finished <- source
 				<-s.workChan
 			}()
 			ctx, cancel := context.WithCancel(ctx)
 			logger := contexts.GetLogger(ctx).With(zap.String("source", source))
 			s.cancel = cancel
+
+			length, err := getAudioLength(source)
+			if err != nil {
+				logger.Error("ffmpeg get audio length", zap.Error(err))
+				return
+			}
+			s.length = length
 
 			ffmpeg, stdout, stderr, err := ffmpegStart(ctx, source, position)
 			if err != nil {
@@ -143,7 +158,7 @@ func (s *Service) Destroy() {
 	}
 }
 
-func (s *Service) SongPosition() <-chan time.Duration {
+func (s *Service) SongPosition() <-chan SongPosition {
 	return s.songTicks
 }
 
@@ -211,9 +226,30 @@ func (s *Service) streamSongPosition(stdout io.ReadCloser) {
 			if err != nil {
 				continue
 			}
-			s.songTicks <- time.Duration(microseconds) * time.Microsecond
+
+			s.songTicks <- SongPosition{
+				Elapsed: time.Duration(microseconds) * time.Microsecond,
+				Length:  s.length,
+			}
 		}
 	}
+}
+
+func getAudioLength(path string) (time.Duration, error) {
+	out, _ := exec.Command("ffmpeg", "-i", path).CombinedOutput()
+
+	re := regexp.MustCompile(`Duration: (.*?),`)
+	matches := re.FindStringSubmatch(string(out))
+	if len(matches) < 2 {
+		return 0, fmt.Errorf("could not find duration in ffmpeg output")
+	}
+
+	t, err := time.Parse("15:04:05", matches[1])
+	if err != nil {
+		return 0, err
+	}
+	duration := time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute + time.Duration(t.Second())*time.Second
+	return duration, nil
 }
 
 // streaming ffmpeg

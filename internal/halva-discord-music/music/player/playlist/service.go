@@ -41,6 +41,13 @@ func (s *service) Remove() {
 	s.queue = s.queue[1:]
 }
 
+func (s *service) RemoveForce() {
+	if len(s.queue) == 0 {
+		return
+	}
+	s.queue = s.queue[1:]
+}
+
 func (s *service) Loop() {
 	s.loop = true
 }

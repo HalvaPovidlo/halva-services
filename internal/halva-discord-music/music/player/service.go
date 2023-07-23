@@ -35,7 +35,7 @@ type AudioService interface {
 	DestroyIdle() bool
 	Idle() bool
 	Finished() <-chan string
-	SongPosition() <-chan time.Duration
+	SongPosition() <-chan audio.SongPosition
 }
 
 type Downloader interface {
@@ -53,6 +53,7 @@ type PlaylistManager interface {
 	Peek() *psong.Item
 	Queue() []psong.Item
 	Remove()
+	RemoveForce()
 	Loop()
 	LoopDisable()
 	Shuffle()
@@ -62,6 +63,7 @@ type PlaylistManager interface {
 type State struct {
 	Current  psong.Item    `json:"current"`
 	Position time.Duration `json:"position"`
+	Length   time.Duration `json:"length"`
 	Loop     bool          `json:"loop"`
 	Radio    bool          `json:"radio"`
 	//Shuffle  bool          `json:"shuffle"`
@@ -84,7 +86,7 @@ type Service struct {
 	errorHandlers chan ErrorHandler
 
 	posMx        *sync.Mutex
-	songPosition time.Duration
+	songPosition audio.SongPosition
 
 	ctx context.Context
 }
@@ -167,13 +169,7 @@ func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logge
 			return false, fmt.Errorf("delete song")
 		}
 	case commandSendState:
-		s.posMx.Lock()
-		s.state.Position = s.songPosition
-		s.posMx.Unlock()
-
-		s.state.Queue = s.playlist.Queue()
-		s.states <- s.state
-		//go func() { s.states <- s.state }()
+		s.sendState()
 	case commandDisconnectIdle:
 		if s.audio != nil && s.audio.DestroyIdle() {
 			logger.Info("process command")
@@ -281,6 +277,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		Service: psong.ServiceType(song.Service),
 	})
 	if err != nil {
+		s.playlist.RemoveForce()
 		return fmt.Errorf("download song, %s: %+w", song.URL, err)
 	}
 
@@ -309,7 +306,8 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 			}}
 
 			s.posMx.Lock()
-			s.songPosition = 0
+			s.songPosition.Length = 0
+			s.songPosition.Elapsed = 0
 			s.posMx.Unlock()
 
 		case pos := <-ticks:
@@ -377,4 +375,15 @@ func (s *Service) sendPlayIfNotConnected(cmd *Command) {
 			s.commands <- &cmd
 		}()
 	}
+}
+
+func (s *Service) sendState() {
+	s.posMx.Lock()
+	s.state.Position = s.songPosition.Elapsed
+	s.state.Length = s.songPosition.Length
+	s.posMx.Unlock()
+
+	s.state.Queue = s.playlist.Queue()
+	s.states <- s.state
+	//go func() { s.states <- s.state }()
 }

@@ -3,9 +3,9 @@ package firestore
 import (
 	"context"
 	"fmt"
-	"google.golang.org/api/iterator"
 
 	"cloud.google.com/go/firestore"
+	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -48,22 +48,23 @@ func (s *storage) Set(ctx context.Context, userID string, item *psong.Item) erro
 	err := s.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		userCount := int64(0)
 		userSongDoc, err := tx.Get(userSongRef)
-		if err != nil && status.Code(err) != codes.NotFound {
+		switch {
+		case err != nil && status.Code(err) != codes.NotFound:
 			return fmt.Errorf("get user song doc: %+w", err)
+		case err == nil:
+			us, err := psong.Parse(userSongDoc)
+			if err != nil {
+				return fmt.Errorf("parse user song doc: %+w", err)
+			}
+			userCount = us.Count
 		}
 
-		us, err := psong.Parse(userSongDoc)
-		if err != nil {
-			return fmt.Errorf("parse user song doc: %+w", err)
-		}
-
-		userCount = us.Count
 		userCount++
 
 		if err := tx.Set(songRef, item); err != nil {
 			return fmt.Errorf("tx set song doc: %+w", err)
 		}
-		userSong := item
+		userSong := *item
 		userSong.Count = userCount
 
 		if err := tx.Set(userSongRef, userSong); err != nil {

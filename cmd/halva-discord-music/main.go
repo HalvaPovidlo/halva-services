@@ -12,6 +12,8 @@ import (
 
 	"github.com/HalvaPovidlo/halva-services/cmd/halva-discord-music/config"
 	apiv1 "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1/socket"
+	pds "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/firestore"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player"
@@ -22,7 +24,6 @@ import (
 	fire "github.com/HalvaPovidlo/halva-services/pkg/firestore"
 	"github.com/HalvaPovidlo/halva-services/pkg/jwt"
 	"github.com/HalvaPovidlo/halva-services/pkg/log"
-	"github.com/HalvaPovidlo/halva-services/pkg/socket"
 )
 
 const configPathEnv = "CONFIG_PATH"
@@ -34,6 +35,8 @@ func main() {
 	}
 	logger := log.NewLogger(cfg.General.Debug)
 	ctx := contexts.WithLogger(context.Background(), logger)
+
+	pds.NewClient(cfg.Discord.Token)
 
 	fireClient, err := fire.New(ctx, "halvabot-firebase.json")
 	if err != nil {
@@ -56,11 +59,16 @@ func main() {
 
 	musicPlayer := player.New(ctx, playlist.New(), downloader, searcher, time.Duration(cfg.General.StateTicks)*time.Millisecond)
 
-	handler := apiv1.New(musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
+	handler := apiv1.New(ctx, musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)
 	echoServer.Run(cfg.General.Port, logger)
+
+	if err := pds.Connect(ctx); err != nil {
+		logger.Panic("failed to discord connect: ", zap.Error(err))
+		return
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)

@@ -7,10 +7,13 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"
+
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
 )
 
 type Config struct {
 	General GeneralConfig
+	Discord discord.Config
 }
 
 type GeneralConfig struct {

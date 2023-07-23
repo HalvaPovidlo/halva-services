@@ -26,7 +26,7 @@ type storageInterface interface {
 
 type Request struct {
 	Text    string
-	userID  string
+	UserID  string
 	Service psong.ServiceType
 }
 
@@ -64,7 +64,7 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 		case err == nil:
 			song.Count++
 			song.LastPlay = time.Now()
-			if err := s.storage.Set(ctx, request.userID, song); err != nil {
+			if err := s.storage.Set(ctx, request.UserID, song); err != nil {
 				return nil, fmt.Errorf("add song to storage: %+w", err)
 			}
 			return song, nil
@@ -80,7 +80,13 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 		return nil, fmt.Errorf("search song on youtube: %+w", err)
 	}
 
-	if err := s.storage.Set(ctx, request.userID, song); err != nil {
+	storageSong, err := s.storage.Get(ctx, song.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get song from storage: %+w", err)
+	}
+	song.Count = storageSong.Count + 1
+
+	if err := s.storage.Set(ctx, request.UserID, song); err != nil {
 		return nil, fmt.Errorf("add song to storage: %+w", err)
 	}
 

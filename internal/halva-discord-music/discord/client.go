@@ -17,6 +17,10 @@ var (
 	App   *discord.Application
 )
 
+type Config struct {
+	Token string
+}
+
 func NewClient(token string) {
 	State = state.NewWithIntents("Bot "+token,
 		gateway.IntentGuilds,

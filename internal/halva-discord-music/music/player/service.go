@@ -152,7 +152,7 @@ func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.
 
 		song, err := s.searcher.Search(ctx, cmd.SearchRequest)
 		if err != nil {
-			return fmt.Errorf("search song: %+w", err)
+			return fmt.Errorf("search song %s: %+w", cmd.SearchRequest.Text, err)
 		}
 		s.playlist.Add(song)
 

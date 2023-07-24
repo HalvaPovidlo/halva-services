@@ -18,8 +18,7 @@ import (
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
-// const autoLeaveDuration = 2 * time.Minute
-const autoLeaveDuration = 15 * time.Second
+const autoLeaveDuration = 2 * time.Minute
 
 var (
 	ErrDifferentVoiceChannel = fmt.Errorf("voice connected to a different voice channel")
@@ -267,6 +266,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 				return fmt.Errorf("get radio song: %+w", err)
 			}
 		} else {
+			s.state.Current = psong.Item{}
 			return nil
 		}
 	}

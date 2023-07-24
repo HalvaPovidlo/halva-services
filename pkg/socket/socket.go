@@ -3,6 +3,7 @@ package socket
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -21,7 +22,9 @@ type socket struct {
 }
 
 func NewSocket(ctx context.Context, c echo.Context) (*socket, error) {
-	up := &websocket.Upgrader{}
+	up := &websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
+		return true
+	}}
 	conn, err := up.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("upgrade echo context to websocket: %+w", err)

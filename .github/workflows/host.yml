@@ -6,9 +6,20 @@ on:
         description: 'Log level'
         required: true
         default: 'warning'
+      deploy:
+        description: 'Deploy app to the server'
+        required: true
+        type: boolean
+        default: true
+      windows:
+        description: 'Build windows exe'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
-  build:
+  build-linux:
+    if: ${{ inputs.deploy }}
     runs-on: ubuntu-latest
     env:
       S_NAME: ${{ secrets.YANDEX_SERVER_NAME }}
@@ -29,6 +40,30 @@ jobs:
       - name: Build linux
         run: env CGO_ENABLED=0 go build -o deployments/host/halva-host cmd/halva-host/main.go
 
+      - name: Deploy
+        run: |
+          rsync -avze "ssh -o StrictHostKeyChecking=no" deployments/host/* "$S_NAME":/home/halva/services/www/
+          ssh -o StrictHostKeyChecking=no "$S_NAME" /home/halva/services/www/restart.sh
+
+  build-windows:
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    env:
+      S_NAME: ${{ secrets.YANDEX_SERVER_NAME }}
+      S_PASSWORD: ${{ secrets.YANDEX_SSH }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: shimataro/ssh-key-action@v2.5.1
+        with:
+          key: ${{ secrets.YANDEX_SSH }}
+          known_hosts: ${{ secrets.YANDEX_HOST }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+
       - name: Build windows
         run: env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o windows/halva-host.exe cmd/halva-host/main.go
 
@@ -37,9 +72,4 @@ jobs:
         with:
           name: halva-host
           path: windows/halva-host.exe
-          retention-days: 5
-
-      - name: Deploy
-        run: |
-          rsync -avze "ssh -o StrictHostKeyChecking=no" deployments/host/* "$S_NAME":/home/halva/services/www/
-          ssh -o StrictHostKeyChecking=no "$S_NAME" /home/halva/services/www/restart.sh
+          retention-days: 1

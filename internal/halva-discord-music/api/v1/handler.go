@@ -180,9 +180,6 @@ func (h *handler) readStatus(ctx context.Context) {
 	for {
 		select {
 		case state := <-input:
-			if len(state.Queue) > 0 {
-				state.Queue = state.Queue[1:]
-			}
 			err := h.writeStatus(state)
 			if err != nil {
 				logger.Error("write status to sockets", zap.Error(err))

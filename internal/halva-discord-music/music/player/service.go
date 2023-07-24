@@ -136,6 +136,7 @@ func (s *Service) processCommands(ctx context.Context) {
 			if err := s.processCommand(cmd, ctx, logger); err != nil {
 				s.error(logger, err)
 				if cmd.Type == commandPlay && !errors.Is(err, ErrNullVoiceChannelID) {
+					cmd := cmd
 					go func() { s.commands <- cmd }()
 				}
 			}

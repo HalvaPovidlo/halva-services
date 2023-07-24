@@ -85,8 +85,8 @@ func New(ctx context.Context, player Player, manager SocketManager, jwt jwtServi
 }
 
 func (h *handler) RegisterRoutes(e *echo.Echo) {
-	e.GET("/status", h.open)
-	e.GET("/control", h.open, h.jwt.Authorization)
+	e.GET("/api/v1/status", h.open)
+	e.GET("/api/v1/control", h.open, h.jwt.Authorization)
 }
 
 func (h *handler) open(c echo.Context) error {

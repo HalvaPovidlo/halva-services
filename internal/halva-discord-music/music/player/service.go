@@ -199,8 +199,8 @@ func (s *Service) processPublicCommand(cmd *Command, ctx context.Context, logger
 	logger.Info("process command")
 	switch cmd.Type {
 	case CommandSkip:
-		s.playlist.LoopDisable()
 		if s.audio != nil {
+			s.playlist.RemoveForce()
 			s.audio.Stop()
 		}
 	case CommandEnqueue:

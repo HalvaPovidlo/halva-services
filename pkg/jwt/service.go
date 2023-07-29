@@ -73,6 +73,7 @@ func (s *service) tokenExtractor() echo.MiddlewareFunc {
 		ContextKey:    contextKey,
 		SigningKey:    s.secret,
 		SigningMethod: s.GetSigningMethod().Alg(),
+		TokenLookup:   "header:Authorization:Bearer ,query:token:",
 		NewClaimsFunc: func(c echo.Context) jwt.Claims {
 			return &Claims{}
 		},

@@ -14,7 +14,7 @@ const (
 	userIDClaim = "userID_jwt"
 )
 
-var TokenTTL = time.Minute * 60
+var TokenTTL = time.Second * 10
 
 type Claims struct {
 	UserID string `json:"userID"`

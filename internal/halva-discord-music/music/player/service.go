@@ -132,10 +132,10 @@ func (s *Service) processCommands(ctx context.Context) {
 	for {
 		select {
 		case cmd := <-s.commands:
-			ctx, logger := cmd.ContextLogger(ctx)
+			ctx, logger := cmd.contextLogger(ctx)
 			if err := s.processCommand(cmd, ctx, logger); err != nil {
 				s.error(logger, err)
-				if cmd.Type == commandPlay && !errors.Is(err, ErrNullVoiceChannelID) {
+				if cmd.typ == commandPlay && !errors.Is(err, ErrNullVoiceChannelID) {
 					cmd := cmd
 					go func() { s.commands <- cmd }()
 				}
@@ -157,13 +157,13 @@ func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.
 		return err
 	}
 
-	return fmt.Errorf("unknown command: %s", cmd.Type)
+	return fmt.Errorf("unknown command: %s", cmd.typ)
 }
 
 func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logger *zap.Logger) (bool, error) {
-	switch cmd.Type {
+	switch cmd.typ {
 	case commandPlay:
-		return true, s.play(ctx, cmd.VoiceChannelID)
+		return true, s.play(ctx, cmd.voiceChannelID)
 	case commandRemove:
 		s.playlist.Remove()
 	case commandDeleteSong:
@@ -178,7 +178,7 @@ func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logge
 			s.audio = nil
 			s.currentVoice = discord.NullChannelID
 		}
-	case CommandDisconnect:
+	case commandDisconnect:
 		if s.audio != nil {
 			s.audio.Destroy()
 			s.audio = nil
@@ -192,43 +192,43 @@ func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logge
 }
 
 func (s *Service) processPublicCommand(cmd *Command, ctx context.Context, logger *zap.Logger) (bool, error) {
-	if s.audio != nil && cmd.VoiceChannelID != s.currentVoice {
+	if s.audio != nil && cmd.voiceChannelID != s.currentVoice {
 		return false, ErrDifferentVoiceChannel
 	}
 
 	logger.Info("process command")
-	switch cmd.Type {
-	case CommandSkip:
+	switch cmd.typ {
+	case commandSkip:
 		if s.audio != nil {
 			s.playlist.RemoveForce()
 			s.audio.Stop()
 		}
-	case CommandEnqueue:
-		song, err := s.searcher.Search(ctx, cmd.SearchRequest)
+	case commandEnqueue:
+		song, err := s.searcher.Search(ctx, cmd.searchRequest)
 		if err != nil {
-			return false, fmt.Errorf("search song %s: %+w", cmd.SearchRequest.Text, err)
+			return false, fmt.Errorf("search song %s: %+w", cmd.searchRequest.Text, err)
 		}
 		s.playlist.Add(song)
 
 		s.sendPlayIfNotConnected(cmd)
-	case CommandRadio:
+	case commandRadio:
 		s.state.Radio = true
 		s.sendPlayIfNotConnected(cmd)
-	case CommandRadioOff:
+	case commandRadioOff:
 		s.state.Radio = false
-	case CommandLoop:
+	case commandLoop:
 		s.state.Loop = true
 		s.playlist.Loop()
-	case CommandLoopOff:
+	case commandLoopOff:
 		s.state.Loop = false
 		s.playlist.LoopDisable()
-	case CommandShuffle:
+	case commandShuffle:
 		//s.state.Shuffle = true
 		s.playlist.Shuffle()
-	case CommandShuffleOff:
+	case commandShuffleOff:
 		//s.state.Shuffle = false
 		s.playlist.ShuffleDisable()
-	case CommandDisconnect:
+	case commandDisconnect:
 		if s.audio != nil {
 			s.audio.Destroy()
 			s.audio = nil
@@ -264,6 +264,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		if s.state.Radio {
 			song, err = s.searcher.Radio(3)
 			if err != nil {
+				s.state.Radio = false
 				return fmt.Errorf("get radio song: %+w", err)
 			}
 		} else {
@@ -303,9 +304,9 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 				return
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
-			s.commands <- &Command{Type: commandRemove}
-			s.commands <- &Command{Type: commandPlay}
-			s.commands <- &Command{Type: commandDeleteSong, downloadRequest: &download.Request{
+			s.commands <- &Command{typ: commandRemove}
+			s.commands <- &Command{typ: commandPlay}
+			s.commands <- &Command{typ: commandDeleteSong, downloadRequest: &download.Request{
 				Source: source,
 			}}
 
@@ -332,9 +333,9 @@ func (s *Service) processOther(ctx context.Context, duration time.Duration) {
 	for {
 		select {
 		case <-t.C:
-			s.commands <- &Command{Type: commandSendState}
+			s.commands <- &Command{typ: commandSendState}
 		case <-s.autoLeaveTicker.C:
-			s.commands <- &Command{Type: commandDisconnectIdle}
+			s.commands <- &Command{typ: commandDisconnectIdle}
 		case <-ctx.Done():
 			return
 		}
@@ -372,9 +373,9 @@ func (s *Service) processErrors(ctx context.Context) {
 }
 
 func (s *Service) sendPlayIfNotConnected(cmd *Command) {
-	if s.audio == nil && cmd.VoiceChannelID != discord.NullChannelID {
+	if s.audio == nil && cmd.voiceChannelID != discord.NullChannelID {
 		cmd := *cmd
-		cmd.Type = commandPlay
+		cmd.typ = commandPlay
 		go func() {
 			s.commands <- &cmd
 		}()

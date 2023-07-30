@@ -2,24 +2,26 @@ package player
 
 import (
 	"context"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
+	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
 const (
-	CommandSkip       = "skip"
-	CommandEnqueue    = "enqueue"
-	CommandLoop       = "loop"
-	CommandLoopOff    = "loop_off"
-	CommandRadio      = "radio"
-	CommandRadioOff   = "radio_off"
-	CommandShuffle    = "shuffle"
-	CommandShuffleOff = "shuffle_off"
-	CommandDisconnect = "disconnect"
+	commandSkip       = "skip"
+	commandEnqueue    = "enqueue"
+	commandLoop       = "loop"
+	commandLoopOff    = "loop_off"
+	commandRadio      = "radio"
+	commandRadioOff   = "radio_off"
+	commandShuffle    = "shuffle"
+	commandShuffleOff = "shuffle_off"
+	commandDisconnect = "disconnect"
 
 	commandPlay           = "play"
 	commandRemove         = "remove"
@@ -29,36 +31,74 @@ const (
 )
 
 type Command struct {
-	Type           string
-	UserID         discord.UserID
-	VoiceChannelID discord.ChannelID
+	typ            string
+	userID         discord.UserID
+	voiceChannelID discord.ChannelID
 
 	downloadRequest *download.Request
-	SearchRequest   *search.Request
+	searchRequest   *search.Request
 
-	TraceID string
+	traceID string
 }
 
-func (c *Command) ContextLogger(ctx context.Context) (context.Context, *zap.Logger) {
+func Enqueue(query string, service psong.ServiceType, userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{
+		typ:            commandEnqueue,
+		userID:         userID,
+		voiceChannelID: voiceID,
+		searchRequest: &search.Request{
+			Text:    query,
+			UserID:  userID.String(),
+			Service: service,
+		},
+		traceID: traceID,
+	}
+}
+
+func Skip(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{typ: commandSkip, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+}
+
+func Loop(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{typ: commandLoop, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+}
+
+func LoopOff(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{typ: commandLoopOff, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+}
+
+func Radio(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{typ: commandRadio, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+}
+
+func RadioOff(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{typ: commandRadioOff, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+}
+
+func Disconnect(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+	return &Command{typ: commandDisconnect, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+}
+
+func (c *Command) contextLogger(ctx context.Context) (context.Context, *zap.Logger) {
 	fields := []zap.Field{
-		zap.String("command", c.Type),
-		zap.Stringer("voiceID", c.VoiceChannelID),
+		zap.String("command", c.typ),
+		zap.Stringer("voiceID", c.voiceChannelID),
 	}
-	if c.UserID != discord.NullUserID {
-		fields = append(fields, zap.Stringer("userID", c.UserID))
+	if c.userID != discord.NullUserID {
+		fields = append(fields, zap.Stringer("userID", c.userID))
 	}
-	if c.VoiceChannelID != discord.NullChannelID {
-		fields = append(fields, zap.Stringer("voiceID", c.VoiceChannelID))
+	if c.voiceChannelID != discord.NullChannelID {
+		fields = append(fields, zap.Stringer("voiceID", c.voiceChannelID))
 	}
 	if c.downloadRequest != nil {
 		fields = append(fields, zap.String("songPath", c.downloadRequest.Source))
 	}
-	if c.SearchRequest != nil {
+	if c.searchRequest != nil {
 		fields = append(fields,
-			zap.String("search.Request", string(c.SearchRequest.Service)+"_"+c.SearchRequest.Text),
+			zap.String("search.Request", string(c.searchRequest.Service)+"_"+c.searchRequest.Text),
 		)
 	}
 	logger := contexts.GetLogger(ctx).With(fields...)
-	nctx := contexts.WithValues(ctx, logger, c.TraceID)
+	nctx := contexts.WithValues(ctx, logger, c.traceID)
 	return nctx, contexts.GetLogger(nctx)
 }

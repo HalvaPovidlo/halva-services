@@ -15,7 +15,6 @@ import (
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1/socket"
 	pds "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
@@ -23,13 +22,18 @@ import (
 type commandType string
 
 const (
-	CommandPlay     commandType = "play"
-	CommandSkip     commandType = "skip"
-	CommandLoop     commandType = "loop"
-	CommandLoopOff  commandType = "loop_off"
-	CommandRadio    commandType = "radio"
-	CommandRadioOff commandType = "radio_off"
+	commandPlay       commandType = "play"
+	commandSkip       commandType = "skip"
+	commandLoop       commandType = "loop"
+	commandLoopOff    commandType = "loop_off"
+	commandRadio      commandType = "radio"
+	commandRadioOff   commandType = "radio_off"
+	commandDisconnect commandType = "disconnect"
 )
+
+type discordClient interface {
+	VoiceState(discord.GuildID, discord.UserID) (*discord.VoiceState, error)
+}
 
 type jwtService interface {
 	Authorization(next echo.HandlerFunc) echo.HandlerFunc
@@ -64,6 +68,7 @@ type outputMessage struct {
 
 type handler struct {
 	player Player
+	client discordClient
 	socket SocketManager
 	jwt    jwtService
 
@@ -72,9 +77,10 @@ type handler struct {
 	web  string
 }
 
-func New(ctx context.Context, player Player, manager SocketManager, jwt jwtService) *handler {
+func New(ctx context.Context, client discordClient, player Player, manager SocketManager, jwt jwtService) *handler {
 	h := &handler{
 		player: player,
+		client: client,
 		socket: manager,
 		jwt:    jwt,
 	}
@@ -137,40 +143,30 @@ func (h *handler) readSocket(ctx context.Context) {
 }
 
 func (h *handler) processCommand(ctx context.Context, cmd *Command, userID discord.UserID) error {
-	voiceState, err := pds.State.VoiceState(pds.HalvaGuildID, userID)
+	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, userID)
 	if err != nil {
 		return fmt.Errorf("get user voice state: %+w", err)
 	}
 
-	command := &player.Command{
-		UserID:         userID,
-		VoiceChannelID: voiceState.ChannelID,
-		TraceID:        contexts.GetTraceID(ctx),
-	}
-
 	playerInput := h.player.Input()
 	switch cmd.Type {
-	case CommandPlay:
-		command.Type = player.CommandEnqueue
-		command.SearchRequest = &search.Request{
-			Text:    cmd.Query,
-			UserID:  userID.String(),
-			Service: cmd.Service,
-		}
-	case CommandSkip:
-		command.Type = player.CommandSkip
-	case CommandLoop:
-		command.Type = player.CommandLoop
-	case CommandLoopOff:
-		command.Type = player.CommandLoopOff
-	case CommandRadio:
-		command.Type = player.CommandRadio
-	case CommandRadioOff:
-		command.Type = player.CommandRadioOff
+	case commandPlay:
+		playerInput <- player.Enqueue(cmd.Query, cmd.Service, userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	case commandSkip:
+		playerInput <- player.Skip(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	case commandLoop:
+		playerInput <- player.Loop(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	case commandLoopOff:
+		playerInput <- player.LoopOff(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	case commandRadio:
+		playerInput <- player.Radio(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	case commandRadioOff:
+		playerInput <- player.RadioOff(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	case commandDisconnect:
+		playerInput <- player.Disconnect(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	default:
-		return fmt.Errorf("unknown command: %s", command.Type)
+		return fmt.Errorf("unknown command: %s %s", cmd.Type, cmd.Query)
 	}
-	go func() { playerInput <- command }()
 	return nil
 }
 

@@ -58,22 +58,12 @@ func loggerMiddleware(log *zap.Logger) echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			traceID := c.Request().Header.Get(echo.HeaderXRequestID)
 			contexts.SetValuesEcho(c, log, traceID)
-			traceID = contexts.GetTraceID(c.Request().Context())
-			log.Info("Request", zap.String("trace_id", traceID))
-
-			start := time.Now()
-			err := next(c)
-			if err != nil {
-				c.Error(err)
-			}
 
 			req := c.Request()
 			res := c.Response()
-
 			fields := []zapcore.Field{
-				zap.String("trace_id", traceID),
+				zap.String("trace_id", contexts.GetTraceID(c.Request().Context())),
 				zap.String("remote_ip", c.RealIP()),
-				zap.String("latency", time.Since(start).String()),
 				zap.String("host", req.Host),
 				zap.String("request", fmt.Sprintf("%s %s", req.Method, req.RequestURI)),
 				zap.Int("status", res.Status),
@@ -81,6 +71,14 @@ func loggerMiddleware(log *zap.Logger) echo.MiddlewareFunc {
 				zap.String("user_agent", req.UserAgent()),
 			}
 
+			log.Info("Request", fields...)
+			start := time.Now()
+			err := next(c)
+			if err != nil {
+				c.Error(err)
+			}
+
+			fields = append(fields, zap.String("latency", time.Since(start).String()))
 			n := res.Status
 			switch {
 			case n >= 500:

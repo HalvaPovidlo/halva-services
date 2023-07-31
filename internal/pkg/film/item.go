@@ -16,7 +16,7 @@ const (
 	ExcellentScore       = 2
 )
 
-// Item TODO: comments, user tags
+// Item TODO: user tags
 type Item struct {
 	ID                       string           `firestore:"-" json:"id"`
 	Title                    string           `firestore:"title,omitempty" json:"title"`
@@ -40,10 +40,8 @@ type Item struct {
 	Serial                   bool             `firestore:"serial" json:"serial"`
 	ShortFilm                bool             `firestore:"short_film" json:"short_film"`
 	Genres                   []string         `firestore:"genres,omitempty" json:"genres,omitempty"`
-	//UserScore                *Score             `firestore:"user_score" json:"user_score,omitempty"`
-	//Score                    int                `firestore:"score" json:"score"`
-	//RatingHalva              float64            `firestore:"rating_halva" json:"rating_halva"`
-	//Average                  float64            `firestore:"average,omitempty" json:"average,omitempty"`
+	UpdatedAt                time.Time        `firestore:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedAt                time.Time        `firestore:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
 type Comment struct {

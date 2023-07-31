@@ -3,6 +3,7 @@ package film
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/pkg/errors"
@@ -30,6 +31,7 @@ func NewStorage(client *firestore.Client) *storage {
 }
 
 func (s *storage) Set(ctx context.Context, userID string, item *film.Item) error {
+	item.UpdatedAt = time.Now()
 	var (
 		score, ok = item.Scores[userID]
 		filmRef   = s.Collection(fire.FilmsCollection).Doc(item.ID)

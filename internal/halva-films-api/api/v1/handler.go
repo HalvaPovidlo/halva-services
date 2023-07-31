@@ -22,6 +22,8 @@ const (
 	SortRatingSum         = "sum"
 	SortRatingAverage     = "average"
 	SortRatingScoreNumber = "score_number"
+	SortCreatedAt         = "created"
+	SortUpdatedAt         = "updated"
 
 	errEmptyID      = "empty id"
 	errFilmNotFound = "film not found"
@@ -243,6 +245,10 @@ func (h *handler) sortFilms(films pfilm.Items, sort string) {
 		films.SortAverage()
 	case SortRatingScoreNumber:
 		films.SortScoreNumber()
+	case SortUpdatedAt:
+		films.SortUpdatedAt()
+	case SortCreatedAt:
+		films.SortCreatedAt()
 	default:
 		if sort == h.defaultSort {
 			return
@@ -305,6 +311,8 @@ func build(film *pfilm.Item, userID string, withComments bool) *filmResponse {
 		ShortFilm:        film.ShortFilm,
 		Genres:           film.Genres,
 		Comments:         comments,
+		UpdatedAt:        film.UpdatedAt,
+		CreatedAt:        film.CreatedAt,
 	}
 }
 
@@ -341,6 +349,8 @@ type filmResponse struct {
 	ShortFilm        bool           `json:"short_film"`
 	Genres           []string       `json:"genres,omitempty"`
 	Comments         []commentResp  `json:"comments,omitempty"`
+	UpdatedAt        time.Time      `json:"updated_at,omitempty"`
+	CreatedAt        time.Time      `json:"created_at,omitempty"`
 }
 
 type commentResp struct {

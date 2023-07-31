@@ -25,6 +25,18 @@ func (f Items) SortKinopoisk() {
 	})
 }
 
+func (f Items) SortUpdatedAt() {
+	sort.Slice(f, func(i, j int) bool {
+		return f[i].UpdatedAt.After(f[j].UpdatedAt)
+	})
+}
+
+func (f Items) SortCreatedAt() {
+	sort.Slice(f, func(i, j int) bool {
+		return f[i].CreatedAt.After(f[j].CreatedAt)
+	})
+}
+
 func (f Items) SortLexicographic() {
 	sort.Slice(f, func(i, j int) bool {
 		a := f[i].Title

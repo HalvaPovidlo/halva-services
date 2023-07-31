@@ -13,6 +13,7 @@ import (
 var (
 	ErrAlreadyExists = errors.New("film already exists")
 	ErrNoScore       = errors.New("film has no score from the user")
+	defaultDate      = time.Date(1999, time.August, 31, 6, 0, 0, 0, time.Local)
 )
 
 type cacheService interface {
@@ -80,6 +81,7 @@ func (s *service) New(ctx context.Context, userID, url string, score film.Score)
 		return nil, errors.New("get film from kinopoisk")
 	}
 
+	f.CreatedAt = time.Now()
 	f.Scores = make(map[string]film.Score, 10)
 	f.Scores[userID] = score
 
@@ -126,6 +128,14 @@ func (s *service) All(ctx context.Context) (film.Items, error) {
 	films, err := s.storage.All(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "get film from storage")
+	}
+	for i := range films {
+		if films[i].CreatedAt.IsZero() {
+			films[i].CreatedAt = defaultDate
+		}
+		if films[i].UpdatedAt.IsZero() {
+			films[i].UpdatedAt = defaultDate
+		}
 	}
 
 	s.cache.SetAll(films)
@@ -195,6 +205,7 @@ func (s *service) Comment(ctx context.Context, userID, url, text string) (*film.
 	if err := s.storage.AddComment(ctx, f.ID, &comment); err != nil {
 		return nil, fmt.Errorf("add comment to storage: %+w", err)
 	}
+	f.UpdatedAt = time.Now()
 	s.cache.Set(f)
 	return f, nil
 }

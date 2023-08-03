@@ -2,8 +2,6 @@ package discord
 
 import (
 	"context"
-	"fmt"
-	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"strings"
 	"time"
 

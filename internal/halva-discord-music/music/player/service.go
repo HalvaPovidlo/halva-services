@@ -1,4 +1,6 @@
 // TODO: если бот отключился, то кидать событие destroy
+// TODO: stop downloader if skip current song +++ вынести загрузку в отедльный поток
+// можно сделать такую же схему как и с аудио с workChan и если загрузка не началась, то скипать событие
 package player
 
 import (
@@ -200,7 +202,7 @@ func (s *Service) processPublicCommand(cmd *Command, ctx context.Context, logger
 	switch cmd.typ {
 	case commandSkip:
 		if s.audio != nil {
-			s.playlist.RemoveForce()
+			//s.playlist.RemoveForce()
 			s.audio.Stop()
 		}
 	case commandEnqueue:
@@ -210,10 +212,10 @@ func (s *Service) processPublicCommand(cmd *Command, ctx context.Context, logger
 		}
 		s.playlist.Add(song)
 
-		s.sendPlayIfNotConnected(cmd)
+		s.sendAsPlay(cmd)
 	case commandRadio:
 		s.state.Radio = true
-		s.sendPlayIfNotConnected(cmd)
+		s.sendAsPlay(cmd)
 	case commandRadioOff:
 		s.state.Radio = false
 	case commandLoop:
@@ -274,7 +276,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 	}
 
 	logger := contexts.GetLogger(ctx)
-	logger.Debug("download song", zap.String("url", song.URL))
+	logger.Info("download song", zap.String("url", song.URL), zap.String("title", song.Title))
 	song.FilePath, err = s.downloader.Download(ctx, &download.Request{
 		ID:      string(song.ID),
 		Source:  song.URL,
@@ -372,14 +374,10 @@ func (s *Service) processErrors(ctx context.Context) {
 	}
 }
 
-func (s *Service) sendPlayIfNotConnected(cmd *Command) {
-	if s.audio == nil && cmd.voiceChannelID != discord.NullChannelID {
-		cmd := *cmd
-		cmd.typ = commandPlay
-		go func() {
-			s.commands <- &cmd
-		}()
-	}
+func (s *Service) sendAsPlay(cmd *Command) {
+	c := *cmd
+	c.typ = commandPlay
+	go func() { s.commands <- &c }()
 }
 
 func (s *Service) sendState() {

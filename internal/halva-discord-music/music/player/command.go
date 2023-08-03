@@ -80,10 +80,8 @@ func Disconnect(userID discord.UserID, voiceID discord.ChannelID, traceID string
 }
 
 func (c *Command) contextLogger(ctx context.Context) (context.Context, *zap.Logger) {
-	fields := []zap.Field{
-		zap.String("command", c.typ),
-		zap.Stringer("voiceID", c.voiceChannelID),
-	}
+	fields := []zap.Field{zap.String("command", c.typ)}
+
 	if c.userID != discord.NullUserID {
 		fields = append(fields, zap.Stringer("userID", c.userID))
 	}
@@ -98,6 +96,7 @@ func (c *Command) contextLogger(ctx context.Context) (context.Context, *zap.Logg
 			zap.String("search.Request", string(c.searchRequest.Service)+"_"+c.searchRequest.Text),
 		)
 	}
+
 	logger := contexts.GetLogger(ctx).With(fields...)
 	nctx := contexts.WithValues(ctx, logger, c.traceID)
 	return nctx, contexts.GetLogger(nctx)

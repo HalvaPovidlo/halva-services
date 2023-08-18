@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -71,11 +72,20 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.router.Use(cmdroute.Deferrable(c, cmdroute.DeferOpts{}))
 
 	err := c.Open(ctx)
-	if err == nil {
-		c.self, err = c.Me()
+	if err != nil {
+		return errors.Wrap(err, "open")
 	}
-	if err == nil {
-		err = cmdroute.OverwriteCommands(c, c.commands)
+
+	c.self, err = c.Me()
+	if err != nil {
+		return errors.Wrap(err, "get Me")
+	}
+
+	if err := cmdroute.OverwriteCommands(c, c.commands); err != nil {
+		var httpErr *httputil.HTTPError
+		if errors.As(err, &httpErr) {
+			return errors.Wrapf(err, "Message: %s Body: %s", httpErr.Message, string(httpErr.Body))
+		}
 	}
 
 	if err != nil {

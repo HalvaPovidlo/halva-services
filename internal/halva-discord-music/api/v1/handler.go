@@ -151,7 +151,7 @@ func (h *handler) processCommand(ctx context.Context, cmd *Command, userID disco
 	playerInput := h.player.Input()
 	switch cmd.Type {
 	case commandPlay:
-		playerInput <- player.Enqueue(cmd.Query, cmd.Service, userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		playerInput <- player.Play(cmd.Query, cmd.Service, userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	case commandSkip:
 		playerInput <- player.Skip(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	case commandLoop:

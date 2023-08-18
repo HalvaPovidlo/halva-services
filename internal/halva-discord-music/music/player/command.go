@@ -13,18 +13,9 @@ import (
 )
 
 const (
-	commandSkip       = "skip"
-	commandEnqueue    = "enqueue"
-	commandLoop       = "loop"
-	commandLoopOff    = "loop_off"
-	commandRadio      = "radio"
-	commandRadioOff   = "radio_off"
-	commandShuffle    = "shuffle"
-	commandShuffleOff = "shuffle_off"
-	commandDisconnect = "disconnect"
-
 	commandPlay           = "play"
-	commandRemove         = "remove"
+	commandSkip           = "skip"
+	commandDisconnect     = "disconnect"
 	commandDeleteSong     = "delete"
 	commandSendState      = "state"
 	commandDisconnectIdle = "disconnect_idle"
@@ -41,9 +32,9 @@ type Command struct {
 	traceID string
 }
 
-func Enqueue(query string, service psong.ServiceType, userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
+func Play(query string, service psong.ServiceType, userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
 	return &Command{
-		typ:            commandEnqueue,
+		typ:            commandPlay,
 		userID:         userID,
 		voiceChannelID: voiceID,
 		searchRequest: &search.Request{
@@ -57,22 +48,6 @@ func Enqueue(query string, service psong.ServiceType, userID discord.UserID, voi
 
 func Skip(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
 	return &Command{typ: commandSkip, userID: userID, voiceChannelID: voiceID, traceID: traceID}
-}
-
-func Loop(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{typ: commandLoop, userID: userID, voiceChannelID: voiceID, traceID: traceID}
-}
-
-func LoopOff(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{typ: commandLoopOff, userID: userID, voiceChannelID: voiceID, traceID: traceID}
-}
-
-func Radio(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{typ: commandRadio, userID: userID, voiceChannelID: voiceID, traceID: traceID}
-}
-
-func RadioOff(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{typ: commandRadioOff, userID: userID, voiceChannelID: voiceID, traceID: traceID}
 }
 
 func Disconnect(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {

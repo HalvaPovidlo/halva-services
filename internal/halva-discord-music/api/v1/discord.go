@@ -75,7 +75,7 @@ func (h *discordHandler) msgPlay(ctx context.Context, c *gateway.MessageCreateEv
 		return nil, fmt.Errorf("get user voice state: %+w", err)
 	}
 
-	h.player.Input() <- player.Enqueue(c.Content, psong.ServiceYoutube, c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	h.player.Input() <- player.Play(c.Content, psong.ServiceYoutube, c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
@@ -93,7 +93,7 @@ func (h *discordHandler) cmdPlay(ctx context.Context, data cmdroute.CommandData)
 		return nil, fmt.Errorf("unmarshal options: %+w", err)
 	}
 
-	h.player.Input() <- player.Enqueue(options.Query, psong.ServiceYoutube, data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	h.player.Input() <- player.Play(options.Query, psong.ServiceYoutube, data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 

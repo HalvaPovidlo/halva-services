@@ -2,33 +2,30 @@ package apiv1
 
 import (
 	"context"
-	"fmt"
-	"sync"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/api/cmdroute"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/pkg/errors"
 
 	pds "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
 type discordHandler struct {
-	client *pds.Client
-	player Player
-	mx     *sync.Mutex
-	radio  bool
-	loop   bool
+	client   *pds.Client
+	player   playerService
+	searcher searcher
 }
 
-func NewDiscord(client *pds.Client, player Player) *discordHandler {
+func NewDiscord(client *pds.Client, player playerService, searcher searcher) *discordHandler {
 	return &discordHandler{
-		client: client,
-		player: player,
-		mx:     &sync.Mutex{},
+		client:   client,
+		player:   player,
+		searcher: searcher,
 	}
 }
 
@@ -64,6 +61,11 @@ func (h *discordHandler) RegisterRoutes() {
 	}, h.cmdLoop, h.msgLoop)
 
 	h.client.RegisterBoth(api.CreateCommandData{
+		Name:        "shuffle",
+		Description: "Enable/Disable shuffle",
+	}, h.cmdShuffle, h.msgShuffle)
+
+	h.client.RegisterBoth(api.CreateCommandData{
 		Name:        "disconnect",
 		Description: "Disconnect bot from voice channel",
 	}, h.cmdDisconnect, h.msgDisconnect)
@@ -72,17 +74,26 @@ func (h *discordHandler) RegisterRoutes() {
 func (h *discordHandler) msgPlay(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, c.Author.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	h.player.Input() <- player.Play(c.Content, psong.ServiceYoutube, c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	song, err := h.searcher.Search(ctx, &search.Request{
+		Text:    c.Content,
+		UserID:  c.Author.ID,
+		Service: psong.ServiceYoutube,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "search song")
+	}
+
+	h.player.Play(song, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) cmdPlay(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, data.Event.User.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
 	var options struct {
@@ -90,129 +101,98 @@ func (h *discordHandler) cmdPlay(ctx context.Context, data cmdroute.CommandData)
 	}
 
 	if err := data.Options.Unmarshal(&options); err != nil {
-		return nil, fmt.Errorf("unmarshal options: %+w", err)
+		return nil, errors.Wrap(err, "unmarshal options")
 	}
 
-	h.player.Input() <- player.Play(options.Query, psong.ServiceYoutube, data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	song, err := h.searcher.Search(ctx, &search.Request{
+		Text:    options.Query,
+		UserID:  data.Event.User.ID,
+		Service: psong.ServiceYoutube,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "search song")
+	}
+
+	h.player.Play(song, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) msgSkip(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, c.Author.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	h.player.Input() <- player.Skip(c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	h.player.Skip(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) cmdSkip(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, data.Event.User.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	h.player.Input() <- player.Skip(data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	h.player.Skip(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) msgRadio(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, c.Author.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	var cmd *player.Command
-	h.mx.Lock()
-	h.radio = !h.radio
-	if h.radio {
-		cmd = player.Radio(c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	} else {
-		cmd = player.RadioOff(c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	}
-	h.mx.Unlock()
-
-	h.player.Input() <- cmd
+	h.player.RadioToggle(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) cmdRadio(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, data.Event.User.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	var cmd *player.Command
-	h.mx.Lock()
-	h.radio = !h.radio
-	if h.radio {
-		cmd = player.Radio(data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	} else {
-		cmd = player.RadioOff(data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	}
-	h.mx.Unlock()
-
-	h.player.Input() <- cmd
+	h.player.RadioToggle(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) msgLoop(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
-	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, c.Author.ID)
-	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
-	}
-
-	var cmd *player.Command
-	h.mx.Lock()
-	h.loop = !h.loop
-	if h.loop {
-		cmd = player.Loop(c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	} else {
-		cmd = player.LoopOff(c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	}
-	h.mx.Unlock()
-
-	h.player.Input() <- cmd
+	h.player.LoopToggle()
 	return nil, nil
 }
 
 func (h *discordHandler) cmdLoop(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
-	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, data.Event.User.ID)
-	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
-	}
+	h.player.LoopToggle()
+	return nil, nil
+}
 
-	var cmd *player.Command
-	h.mx.Lock()
-	h.loop = !h.loop
-	if h.loop {
-		cmd = player.Loop(data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	} else {
-		cmd = player.LoopOff(data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	}
-	h.mx.Unlock()
+func (h *discordHandler) msgShuffle(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
+	h.player.ShuffleToggle()
+	return nil, nil
+}
 
-	h.player.Input() <- cmd
+func (h *discordHandler) cmdShuffle(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
+	h.player.ShuffleToggle()
 	return nil, nil
 }
 
 func (h *discordHandler) msgDisconnect(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, c.Author.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	h.player.Input() <- player.Disconnect(c.Author.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	h.player.Disconnect(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }
 
 func (h *discordHandler) cmdDisconnect(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, data.Event.User.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user voice state: %+w", err)
+		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	h.player.Input() <- player.Disconnect(data.Event.User.ID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+	h.player.Disconnect(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
 }

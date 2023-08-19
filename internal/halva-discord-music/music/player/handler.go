@@ -60,12 +60,16 @@ func (s *service) LoopToggle() {
 	s.playlist.LoopToggle()
 }
 
-func (s *service) Radio(state bool) {
+func (s *service) Radio(state bool, voiceID discord.ChannelID, traceID string) {
 	s.playlist.Radio(state)
+	if state {
+		s.commands <- &command{typ: commandPlay, voiceChannelID: voiceID, traceID: traceID}
+	}
 }
 
-func (s *service) RadioToggle() {
+func (s *service) RadioToggle(voiceID discord.ChannelID, traceID string) {
 	s.playlist.RadioToggle()
+	s.commands <- &command{typ: commandPlay, voiceChannelID: voiceID, traceID: traceID}
 }
 
 func (s *service) Shuffle(state bool) {

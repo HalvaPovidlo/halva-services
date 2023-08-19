@@ -55,9 +55,14 @@ type playerService interface {
 	Play(item *song.Item, voiceID discord.ChannelID, traceID string)
 	Skip(voiceID discord.ChannelID, traceID string)
 	Disconnect(voiceID discord.ChannelID, traceID string)
+
 	Loop(state bool)
-	Radio(state bool)
+	LoopToggle()
+	Radio(state bool, voiceID discord.ChannelID, traceID string)
+	RadioToggle(voiceID discord.ChannelID, traceID string)
 	Shuffle(state bool)
+	ShuffleToggle()
+
 	SubscribeOnErrors(h player.ErrorHandler)
 	SubscribeOnStates(h player.StateHandler)
 }
@@ -181,13 +186,13 @@ func (h *handler) processCommand(ctx context.Context, cmd *command, userID disco
 	case commandLoopOff:
 		h.player.Loop(false)
 	case commandRadio:
-		h.player.Radio(true)
+		h.player.Radio(true, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	case commandRadioOff:
-		h.player.Radio(false)
+		h.player.Radio(false, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	case commandShuffle:
-		h.player.Radio(true)
+		h.player.Shuffle(true)
 	case commandShuffleOff:
-		h.player.Radio(false)
+		h.player.Shuffle(false)
 	case commandDisconnect:
 		h.player.Disconnect(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	default:

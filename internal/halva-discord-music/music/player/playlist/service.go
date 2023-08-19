@@ -21,9 +21,10 @@ type service struct {
 	*sync.Mutex
 }
 
-func New() *service {
+func New(radioService radioService) *service {
 	return &service{
-		queue: make([]psong.Item, 0, 25),
+		radioService: radioService,
+		queue:        make([]psong.Item, 0, 25),
 	}
 }
 

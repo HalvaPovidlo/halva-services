@@ -58,12 +58,12 @@ func main() {
 		logger.Fatal("failed to init downloader", zap.Error(err))
 	}
 
-	musicPlayer := player.New(ctx, playlist.New(), downloader, searcher, time.Duration(cfg.General.StateTicks)*time.Millisecond)
+	musicPlayer := player.New(ctx, playlist.New(searcher), downloader, time.Duration(cfg.General.StateTicks)*time.Millisecond)
 
-	discordHandler := apiv1.NewDiscord(discordClient, musicPlayer)
+	discordHandler := apiv1.NewDiscord(discordClient, musicPlayer, searcher)
 	discordHandler.RegisterRoutes()
 
-	handler := apiv1.New(ctx, discordClient, musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
+	handler := apiv1.New(ctx, discordClient, searcher, musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)

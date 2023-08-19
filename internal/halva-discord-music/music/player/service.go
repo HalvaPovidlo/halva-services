@@ -116,18 +116,6 @@ func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, s
 	return player
 }
 
-func (s *service) SubscribeOnErrors(h ErrorHandler) {
-	go func() {
-		s.errorHandlers <- h
-	}()
-}
-
-func (s *service) SubscribeOnStates(h StateHandler) {
-	go func() {
-		s.stateHandlers <- h
-	}()
-}
-
 func (s *service) processCommands(ctx context.Context) {
 	defer close(s.commands)
 	for {

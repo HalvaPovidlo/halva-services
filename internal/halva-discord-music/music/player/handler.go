@@ -75,3 +75,15 @@ func (s *service) Shuffle(state bool) {
 func (s *service) ShuffleToggle() {
 	s.playlist.ShuffleToggle()
 }
+
+func (s *service) SubscribeOnErrors(h ErrorHandler) {
+	go func() {
+		s.errorHandlers <- h
+	}()
+}
+
+func (s *service) SubscribeOnStates(h StateHandler) {
+	go func() {
+		s.stateHandlers <- h
+	}()
+}

@@ -10,11 +10,13 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1/socket"
 	pds "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
@@ -28,6 +30,8 @@ const (
 	commandLoopOff    commandType = "loop_off"
 	commandRadio      commandType = "radio"
 	commandRadioOff   commandType = "radio_off"
+	commandShuffle    commandType = "shuffle"
+	commandShuffleOff commandType = "shuffle_off"
 	commandDisconnect commandType = "disconnect"
 )
 
@@ -40,20 +44,29 @@ type jwtService interface {
 	ExtractUserID(c echo.Context) (string, error)
 }
 
-type SocketManager interface {
+type socketManager interface {
 	Open(c echo.Context, userID discord.UserID) error
 	Write(data []byte, userID discord.UserID, id uuid.UUID) error
 	WriteAll(data []byte) error
 	ReadChan() <-chan socket.Data
 }
 
-type Player interface {
-	Input() chan<- *player.Command
-	Status() <-chan player.State
+type playerService interface {
+	Play(item *song.Item, voiceID discord.ChannelID, traceID string)
+	Skip(voiceID discord.ChannelID, traceID string)
+	Disconnect(voiceID discord.ChannelID, traceID string)
+	Loop(state bool)
+	Radio(state bool)
+	Shuffle(state bool)
 	SubscribeOnErrors(h player.ErrorHandler)
+	SubscribeOnStates(h player.StateHandler)
 }
 
-type Command struct {
+type searcher interface {
+	Search(ctx context.Context, request *search.Request) (*song.Item, error)
+}
+
+type command struct {
 	Type    commandType      `json:"type"`
 	Query   string           `json:"query,omitempty"`
 	Service song.ServiceType `json:"service,omitempty"`
@@ -67,25 +80,27 @@ type outputMessage struct {
 }
 
 type handler struct {
-	player Player
-	client discordClient
-	socket SocketManager
-	jwt    jwtService
+	player   playerService
+	client   discordClient
+	socket   socketManager
+	searcher searcher
+	jwt      jwtService
 
 	host string
 	port string
 	web  string
 }
 
-func New(ctx context.Context, client discordClient, player Player, manager SocketManager, jwt jwtService) *handler {
+func New(ctx context.Context, client discordClient, searcher searcher, player playerService, manager socketManager, jwt jwtService) *handler {
 	h := &handler{
-		player: player,
-		client: client,
-		socket: manager,
-		jwt:    jwt,
+		player:   player,
+		client:   client,
+		socket:   manager,
+		searcher: searcher,
+		jwt:      jwt,
 	}
 	h.player.SubscribeOnErrors(h.playerErrorHandler)
-	go h.readStatus(ctx)
+	h.player.SubscribeOnStates(h.playerStateHandler)
 	go h.readSocket(ctx)
 	return h
 }
@@ -119,7 +134,7 @@ func (h *handler) readSocket(ctx context.Context) {
 			if data.UserID == discord.NullUserID {
 				continue
 			}
-			var cmd Command
+			var cmd command
 			if err := json.Unmarshal(data.Bytes, &cmd); err != nil {
 				logger.Error("failed to unmarshall data from socket", zap.Error(err))
 				continue
@@ -142,48 +157,43 @@ func (h *handler) readSocket(ctx context.Context) {
 	}
 }
 
-func (h *handler) processCommand(ctx context.Context, cmd *Command, userID discord.UserID) error {
+func (h *handler) processCommand(ctx context.Context, cmd *command, userID discord.UserID) error {
 	voiceState, err := h.client.VoiceState(pds.HalvaGuildID, userID)
 	if err != nil {
-		return fmt.Errorf("get user voice state: %+w", err)
+		return errors.Wrap(err, "get voice state")
 	}
 
-	playerInput := h.player.Input()
 	switch cmd.Type {
 	case commandPlay:
-		playerInput <- player.Play(cmd.Query, cmd.Service, userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		s, err := h.searcher.Search(ctx, &search.Request{
+			Text:    cmd.Query,
+			UserID:  userID,
+			Service: cmd.Service,
+		})
+		if err != nil {
+			return errors.Wrap(err, "search song")
+		}
+		h.player.Play(s, voiceState.ChannelID, contexts.GetTraceID(ctx))
 	case commandSkip:
-		playerInput <- player.Skip(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		h.player.Skip(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	case commandLoop:
-		playerInput <- player.Loop(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		h.player.Loop(true)
 	case commandLoopOff:
-		playerInput <- player.LoopOff(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		h.player.Loop(false)
 	case commandRadio:
-		playerInput <- player.Radio(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		h.player.Radio(true)
 	case commandRadioOff:
-		playerInput <- player.RadioOff(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		h.player.Radio(false)
+	case commandShuffle:
+		h.player.Radio(true)
+	case commandShuffleOff:
+		h.player.Radio(false)
 	case commandDisconnect:
-		playerInput <- player.Disconnect(userID, voiceState.ChannelID, contexts.GetTraceID(ctx))
+		h.player.Disconnect(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	default:
-		return fmt.Errorf("unknown command: %s %s", cmd.Type, cmd.Query)
+		return errors.New("unknown command")
 	}
 	return nil
-}
-
-func (h *handler) readStatus(ctx context.Context) {
-	input := h.player.Status()
-	logger := contexts.GetLogger(ctx)
-	for {
-		select {
-		case state := <-input:
-			err := h.writeStatus(state)
-			if err != nil {
-				logger.Error("write status to sockets", zap.Error(err))
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 func (h *handler) writeStatus(state player.State) error {
@@ -191,11 +201,11 @@ func (h *handler) writeStatus(state player.State) error {
 		State: state,
 	})
 	if err != nil {
-		return fmt.Errorf("marshal state: %+w", err)
+		return errors.Wrap(err, "marshal state")
 	}
 
 	if err := h.socket.WriteAll(bytes); err != nil {
-		return fmt.Errorf("write data to all: %+w", err)
+		return errors.Wrap(err, "write data to all")
 	}
 
 	return nil
@@ -234,4 +244,8 @@ func (h *handler) playerErrorHandler(err error) {
 	}
 
 	_ = h.socket.WriteAll(bytes)
+}
+
+func (h *handler) playerStateHandler(state player.State) {
+	h.playerErrorHandler(h.writeStatus(state))
 }

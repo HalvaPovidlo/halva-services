@@ -310,13 +310,15 @@ func (s *service) sendState() {
 
 	queue := s.playlist.Queue()
 	state := s.playlist.State()
-	s.states <- State{
-		Current:  s.playlist.Current(),
-		Position: pos,
-		Length:   length,
-		Loop:     state.Loop,
-		Radio:    state.Radio,
-		Shuffle:  state.Shuffle,
-		Queue:    queue,
-	}
+	go func() {
+		s.states <- State{
+			Current:  s.playlist.Current(),
+			Position: pos,
+			Length:   length,
+			Loop:     state.Loop,
+			Radio:    state.Radio,
+			Shuffle:  state.Shuffle,
+			Queue:    queue,
+		}
+	}()
 }

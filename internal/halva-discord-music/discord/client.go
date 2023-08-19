@@ -23,6 +23,7 @@ const (
 
 	MonkaS               = "<:monkaS:817041877718138891>"
 	messageInternalError = ":x: **Internal error** " + MonkaS
+	messageSuccess       = ":v: **Successfully Executed**"
 )
 
 type (
@@ -118,18 +119,26 @@ func (c *Client) RegisterCommand(cmd api.CreateCommandData, cmdHandle CommandHan
 		start := time.Now()
 		log.Info("command handled")
 		response, err := cmdHandle(ctx, data)
-		if response == nil && err != nil {
-			return &api.InteractionResponseData{
-				Content:         option.NewNullableString(messageInternalError),
-				Flags:           discord.EphemeralMessage,
-				AllowedMentions: &api.AllowedMentions{},
-			}
-		}
-
 		if err != nil {
 			log.Error("command execution failed", zap.Error(err), zap.Duration("latency", time.Since(start)))
 		} else {
 			log.Info("command executed", zap.Duration("elapsed", time.Since(start)))
+		}
+
+		if response == nil {
+			if err != nil {
+				return &api.InteractionResponseData{
+					Content:         option.NewNullableString(messageInternalError),
+					Flags:           discord.EphemeralMessage,
+					AllowedMentions: &api.AllowedMentions{},
+				}
+			} else {
+				return &api.InteractionResponseData{
+					Content:         option.NewNullableString(messageSuccess),
+					Flags:           discord.EphemeralMessage,
+					AllowedMentions: &api.AllowedMentions{},
+				}
+			}
 		}
 
 		return response

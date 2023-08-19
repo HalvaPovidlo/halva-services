@@ -2,6 +2,8 @@ package apiv1
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/api/cmdroute"
@@ -13,6 +15,19 @@ import (
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
+)
+
+const (
+	messageSearching       = ":trumpet: **Searching** :mag_right:"
+	messageSkip            = ":fast_forward: **Skipped** :thumbsup:"
+	messageFound           = "**Song found** :notes:"
+	messageNotFound        = ":x: **Song not found**"
+	messageAgeRestriction  = ":underage: **Song is blocked**"
+	messageLoopEnabled     = ":white_check_mark: **Loop enabled**"
+	messageLoopDisabled    = ":x: **Loop disabled**"
+	messageRadioEnabled    = ":white_check_mark: **Radio enabled**"
+	messageRadioDisabled   = ":x: **Radio disabled**"
+	messageNotVoiceChannel = ":x: **You have to be in a voice channel to use this command**"
 )
 
 type discordHandler struct {
@@ -77,6 +92,11 @@ func (h *discordHandler) msgPlay(ctx context.Context, c *gateway.MessageCreateEv
 		return nil, errors.Wrap(err, "get user voice state")
 	}
 
+	_, err = h.client.SendMessage(c.ChannelID, messageSearching)
+	if err != nil {
+		return nil, errors.Wrap(err, "send message")
+	}
+
 	song, err := h.searcher.Search(ctx, &search.Request{
 		Text:    c.Content,
 		UserID:  c.Author.ID,
@@ -87,7 +107,7 @@ func (h *discordHandler) msgPlay(ctx context.Context, c *gateway.MessageCreateEv
 	}
 
 	h.player.Play(song, voiceState.ChannelID, contexts.GetTraceID(ctx))
-	return nil, nil
+	return &api.SendMessageData{Content: fmt.Sprintf("%s `%s - %s` %s", messageFound, song.Artist, song.Title, intToEmoji(song.Count))}, nil
 }
 
 func (h *discordHandler) cmdPlay(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
@@ -124,7 +144,7 @@ func (h *discordHandler) msgSkip(ctx context.Context, c *gateway.MessageCreateEv
 	}
 
 	h.player.Skip(voiceState.ChannelID, contexts.GetTraceID(ctx))
-	return nil, nil
+	return &api.SendMessageData{Content: messageSkip}, nil
 }
 
 func (h *discordHandler) cmdSkip(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
@@ -195,4 +215,42 @@ func (h *discordHandler) cmdDisconnect(ctx context.Context, data cmdroute.Comman
 
 	h.player.Disconnect(voiceState.ChannelID, contexts.GetTraceID(ctx))
 	return nil, nil
+}
+
+func intToEmoji(n int64) string {
+	if n == 0 {
+		return ""
+	}
+	number := strconv.Itoa(int(n))
+	res := ""
+	for i := range number {
+		res += digitAsEmoji(string(number[i]))
+	}
+	return res
+}
+
+func digitAsEmoji(digit string) string {
+	switch digit {
+	case "1":
+		return "1️⃣"
+	case "2":
+		return "2️⃣"
+	case "3":
+		return "3️⃣"
+	case "4":
+		return "4️⃣"
+	case "5":
+		return "5️⃣"
+	case "6":
+		return "6️⃣"
+	case "7":
+		return "7️⃣"
+	case "8":
+		return "8️⃣"
+	case "9":
+		return "9️⃣"
+	case "0":
+		return "0️⃣"
+	}
+	return ""
 }

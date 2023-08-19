@@ -24,6 +24,7 @@ type service struct {
 func New(radioService radioService) *service {
 	return &service{
 		radioService: radioService,
+		Mutex:        &sync.Mutex{},
 		queue:        make([]psong.Item, 0, 25),
 	}
 }

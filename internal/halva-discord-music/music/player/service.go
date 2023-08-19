@@ -63,7 +63,7 @@ type PlaylistManager interface {
 }
 
 type State struct {
-	Current  psong.Item    `json:"current"`
+	Current  *psong.Item   `json:"current"`
 	Position time.Duration `json:"position"`
 	Length   time.Duration `json:"length"`
 	Loop     bool          `json:"loop"`
@@ -138,12 +138,15 @@ func (s *service) processCommands(ctx context.Context) {
 func (s *service) processCommand(cmd *command, ctx context.Context, logger *zap.Logger) error {
 	switch cmd.typ {
 	case commandPlay:
+		logger.Info("process command")
 		return s.play(ctx, cmd.voiceChannelID)
 	case commandSkip:
+		logger.Info("process command")
 		if s.audio != nil {
 			s.audio.Stop()
 		}
 	case commandDisconnect:
+		logger.Info("process command")
 		if s.audio != nil {
 			s.audio.Destroy()
 			s.audio = nil
@@ -308,7 +311,7 @@ func (s *service) sendState() {
 	queue := s.playlist.Queue()
 	state := s.playlist.State()
 	s.states <- State{
-		Current:  queue[0],
+		Current:  s.playlist.Current(),
 		Position: pos,
 		Length:   length,
 		Loop:     state.Loop,

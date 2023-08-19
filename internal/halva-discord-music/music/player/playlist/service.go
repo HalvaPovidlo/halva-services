@@ -128,3 +128,20 @@ func (s *service) ShuffleToggle() {
 	s.shuffle = !s.shuffle
 	s.Unlock()
 }
+
+type State struct {
+	Loop    bool
+	Radio   bool
+	Shuffle bool
+}
+
+func (s *service) State() State {
+	s.Lock()
+	defer s.Unlock()
+
+	return State{
+		Loop:    s.loop,
+		Radio:   s.radio,
+		Shuffle: s.shuffle,
+	}
+}

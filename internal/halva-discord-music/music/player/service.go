@@ -13,9 +13,8 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/audio"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/playlist"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
@@ -29,6 +28,8 @@ var (
 
 type ErrorHandler func(err error)
 
+type StateHandler func(state State)
+
 type AudioService interface {
 	Play(ctx context.Context, source string, position time.Duration) bool
 	Stop()
@@ -40,84 +41,94 @@ type AudioService interface {
 }
 
 type Downloader interface {
-	Download(ctx context.Context, r *download.Request) (string, error)
-	Delete(r *download.Request) error
-}
-
-type Searcher interface {
-	Search(ctx context.Context, request *search.Request) (*psong.Item, error)
+	Download(ctx context.Context, request *psong.Item) (string, error)
+	Delete(path string) error
 }
 
 type PlaylistManager interface {
 	Head() *psong.Item
 	Remove(force bool)
+	Add(item *psong.Item)
+	Current() *psong.Item
+	Queue() []psong.Item
+
+	Loop(state bool)
+	LoopToggle()
+	Radio(state bool)
+	RadioToggle()
+	Shuffle(state bool)
+	ShuffleToggle()
+
+	State() playlist.State
 }
 
 type State struct {
+	Current  psong.Item    `json:"current"`
 	Position time.Duration `json:"position"`
 	Length   time.Duration `json:"length"`
+	Loop     bool          `json:"loop"`
+	Radio    bool          `json:"radio"`
+	Shuffle  bool          `json:"shuffle"`
+	Queue    []psong.Item  `json:"queue"`
 }
 
-type Service struct {
+type service struct {
 	audio      AudioService
 	playlist   PlaylistManager
 	downloader Downloader
-	searcher   Searcher
 
 	currentVoice    discord.ChannelID
-	commands        chan *Command
+	commands        chan *command
 	autoLeaveTicker *time.Ticker
 
 	errors        chan error
 	errorHandlers chan ErrorHandler
 
-	// TODO: simplify state logic
-	state        State
-	states       chan State
-	posMx        *sync.Mutex
-	songPosition audio.SongPosition
+	states        chan State
+	stateHandlers chan StateHandler
+	posMx         *sync.Mutex
+	songPosition  audio.SongPosition
 
 	ctx context.Context
 }
 
-func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, searcher Searcher, stateTick time.Duration) *Service {
-	player := &Service{
+func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, stateTick time.Duration) *service {
+	player := &service{
 		ctx:        ctx,
 		playlist:   playlist,
 		downloader: downloader,
-		searcher:   searcher,
 
-		commands:        make(chan *Command),
-		states:          make(chan State),
+		commands:        make(chan *command),
 		autoLeaveTicker: time.NewTicker(autoLeaveDuration),
 
 		errors:        make(chan error),
 		errorHandlers: make(chan ErrorHandler),
 
-		posMx: &sync.Mutex{},
+		states:        make(chan State),
+		stateHandlers: make(chan StateHandler),
+		posMx:         &sync.Mutex{},
 	}
 
 	go player.processCommands(ctx)
 	go player.processOther(ctx, stateTick)
 	go player.processErrors(ctx)
+	go player.processStates(ctx)
 	return player
 }
 
-func (s *Service) Input() chan<- *Command {
-	return s.commands
-}
-
-func (s *Service) Status() <-chan State {
-	return s.states
-}
-
-func (s *Service) SubscribeOnErrors(h ErrorHandler) {
+func (s *service) SubscribeOnErrors(h ErrorHandler) {
 	go func() {
 		s.errorHandlers <- h
 	}()
 }
 
-func (s *Service) processCommands(ctx context.Context) {
+func (s *service) SubscribeOnStates(h StateHandler) {
+	go func() {
+		s.stateHandlers <- h
+	}()
+}
+
+func (s *service) processCommands(ctx context.Context) {
 	defer close(s.commands)
 	for {
 		select {
@@ -136,7 +147,7 @@ func (s *Service) processCommands(ctx context.Context) {
 	}
 }
 
-func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.Logger) error {
+func (s *service) processCommand(cmd *command, ctx context.Context, logger *zap.Logger) error {
 	switch cmd.typ {
 	case commandPlay:
 		return s.play(ctx, cmd.voiceChannelID)
@@ -151,7 +162,7 @@ func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.
 			s.currentVoice = discord.NullChannelID
 		}
 	case commandDeleteSong:
-		if err := s.downloader.Delete(cmd.downloadRequest); err != nil {
+		if err := s.downloader.Delete(cmd.source); err != nil {
 			return errors.Wrap(err, "delete song")
 		}
 	case commandSendState:
@@ -167,7 +178,7 @@ func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.
 	return nil
 }
 
-func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) error {
+func (s *service) play(ctx context.Context, voiceChannel discord.ChannelID) error {
 	var err error
 	if s.audio == nil {
 		if voiceChannel == discord.NullChannelID {
@@ -192,11 +203,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 
 	logger := contexts.GetLogger(ctx).With(zap.String("url", song.URL), zap.String("title", song.Title))
 	logger.Info("download song")
-	song.FilePath, err = s.downloader.Download(ctx, &download.Request{
-		ID:      string(song.ID),
-		Source:  song.URL,
-		Service: psong.ServiceType(song.Service),
-	})
+	filePath, err := s.downloader.Download(ctx, song)
 	if err != nil {
 		// song is not available anymore, so we remove it from playlist
 		s.playlist.Remove(true)
@@ -204,11 +211,11 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 	}
 
 	logger.Info("play song")
-	s.audio.Play(ctx, song.FilePath, 0)
+	s.audio.Play(ctx, filePath, 0)
 	return nil
 }
 
-func (s *Service) listenAudioInstance(ctx context.Context) {
+func (s *service) listenAudioInstance(ctx context.Context) {
 	finished := s.audio.Finished()
 	ticks := s.audio.SongPosition()
 	for {
@@ -219,8 +226,8 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
 			s.playlist.Remove(false)
-			s.commands <- &Command{typ: commandPlay}
-			s.commands <- &Command{typ: commandDeleteSong, downloadRequest: &download.Request{Source: source}}
+			s.commands <- &command{typ: commandPlay}
+			s.commands <- &command{typ: commandDeleteSong, source: source}
 
 			s.posMx.Lock()
 			s.songPosition.Length = 0
@@ -238,23 +245,23 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 	}
 }
 
-func (s *Service) processOther(ctx context.Context, duration time.Duration) {
+func (s *service) processOther(ctx context.Context, duration time.Duration) {
 	t := time.NewTicker(duration)
 	defer t.Stop()
 	defer s.autoLeaveTicker.Stop()
 	for {
 		select {
 		case <-t.C:
-			s.commands <- &Command{typ: commandSendState}
+			s.commands <- &command{typ: commandSendState}
 		case <-s.autoLeaveTicker.C:
-			s.commands <- &Command{typ: commandDisconnectIdle}
+			s.commands <- &command{typ: commandDisconnectIdle}
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *Service) error(logger *zap.Logger, err error) {
+func (s *service) error(logger *zap.Logger, err error) {
 	if err == nil {
 		return
 	}
@@ -264,8 +271,8 @@ func (s *Service) error(logger *zap.Logger, err error) {
 	}()
 }
 
-func (s *Service) processErrors(ctx context.Context) {
-	handlers := make([]ErrorHandler, 0)
+func (s *service) processErrors(ctx context.Context) {
+	handlers := make([]ErrorHandler, 0, 2)
 	defer close(s.errorHandlers)
 	for {
 		select {
@@ -284,11 +291,41 @@ func (s *Service) processErrors(ctx context.Context) {
 	}
 }
 
-func (s *Service) sendState() {
+func (s *service) processStates(ctx context.Context) {
+	handlers := make([]StateHandler, 0, 2)
+	defer close(s.stateHandlers)
+	for {
+		select {
+		case state, ok := <-s.states:
+			if !ok {
+				return
+			}
+			for _, h := range handlers {
+				go h(state)
+			}
+		case h := <-s.stateHandlers:
+			handlers = append(handlers, h)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *service) sendState() {
 	s.posMx.Lock()
-	s.state.Position = s.songPosition.Elapsed
-	s.state.Length = s.songPosition.Length
+	pos := s.songPosition.Elapsed
+	length := s.songPosition.Length
 	s.posMx.Unlock()
 
-	s.states <- s.state
+	queue := s.playlist.Queue()
+	state := s.playlist.State()
+	s.states <- State{
+		Current:  queue[0],
+		Position: pos,
+		Length:   length,
+		Loop:     state.Loop,
+		Radio:    state.Radio,
+		Shuffle:  state.Shuffle,
+		Queue:    queue,
+	}
 }

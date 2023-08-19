@@ -6,9 +6,6 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"go.uber.org/zap"
 
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
-	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
@@ -21,40 +18,28 @@ const (
 	commandDisconnectIdle = "disconnect_idle"
 )
 
-type Command struct {
+type command struct {
 	typ            string
 	userID         discord.UserID
 	voiceChannelID discord.ChannelID
-
-	downloadRequest *download.Request
-	searchRequest   *search.Request
+	source         string
 
 	traceID string
 }
 
-func Play(query string, service psong.ServiceType, userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{
-		typ:            commandPlay,
-		userID:         userID,
-		voiceChannelID: voiceID,
-		searchRequest: &search.Request{
-			Text:    query,
-			UserID:  userID.String(),
-			Service: service,
-		},
-		traceID: traceID,
-	}
+func play(userID discord.UserID, voiceID discord.ChannelID, traceID string) *command {
+	return &command{typ: commandPlay, userID: userID, voiceChannelID: voiceID, traceID: traceID}
 }
 
-func Skip(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{typ: commandSkip, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+func skip(userID discord.UserID, voiceID discord.ChannelID, traceID string) *command {
+	return &command{typ: commandSkip, userID: userID, voiceChannelID: voiceID, traceID: traceID}
 }
 
-func Disconnect(userID discord.UserID, voiceID discord.ChannelID, traceID string) *Command {
-	return &Command{typ: commandDisconnect, userID: userID, voiceChannelID: voiceID, traceID: traceID}
+func disconnect(userID discord.UserID, voiceID discord.ChannelID, traceID string) *command {
+	return &command{typ: commandDisconnect, userID: userID, voiceChannelID: voiceID, traceID: traceID}
 }
 
-func (c *Command) contextLogger(ctx context.Context) (context.Context, *zap.Logger) {
+func (c *command) contextLogger(ctx context.Context) (context.Context, *zap.Logger) {
 	fields := []zap.Field{zap.String("command", c.typ)}
 
 	if c.userID != discord.NullUserID {
@@ -62,14 +47,6 @@ func (c *Command) contextLogger(ctx context.Context) (context.Context, *zap.Logg
 	}
 	if c.voiceChannelID != discord.NullChannelID {
 		fields = append(fields, zap.Stringer("voiceID", c.voiceChannelID))
-	}
-	if c.downloadRequest != nil {
-		fields = append(fields, zap.String("songPath", c.downloadRequest.Source))
-	}
-	if c.searchRequest != nil {
-		fields = append(fields,
-			zap.String("search.Request", string(c.searchRequest.Service)+"_"+c.searchRequest.Text),
-		)
 	}
 
 	logger := contexts.GetLogger(ctx).With(fields...)

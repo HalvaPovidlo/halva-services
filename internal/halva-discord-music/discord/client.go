@@ -2,6 +2,7 @@ package discord
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -173,7 +174,10 @@ func (c *Client) RegisterMessageCommand(name string, handle MessageHandlerFunc) 
 					log.Error("send message failed", zap.Error(err))
 				}
 			case err != nil:
-				if _, err := c.SendMessage(event.ChannelID, messageInternalError); err != nil {
+				if _, err := c.SendMessage(event.ChannelID, messageInternalError, discord.Embed{
+					Title:       err.Error(),
+					Description: fmt.Sprintf("%+v", err),
+				}); err != nil {
 					log.Error("send message failed", zap.Error(err))
 				}
 			}

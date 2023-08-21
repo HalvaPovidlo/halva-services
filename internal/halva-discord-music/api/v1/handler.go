@@ -57,11 +57,11 @@ type playerService interface {
 	Disconnect(voiceID discord.ChannelID, traceID string)
 
 	Loop(state bool)
-	LoopToggle()
+	LoopToggle() bool
 	Radio(state bool, voiceID discord.ChannelID, traceID string)
-	RadioToggle(voiceID discord.ChannelID, traceID string)
+	RadioToggle(voiceID discord.ChannelID, traceID string) bool
 	Shuffle(state bool)
-	ShuffleToggle()
+	ShuffleToggle() bool
 
 	SubscribeOnErrors(h player.ErrorHandler)
 	SubscribeOnStates(h player.StateHandler)

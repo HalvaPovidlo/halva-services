@@ -53,11 +53,11 @@ type PlaylistManager interface {
 	Queue() []psong.Item
 
 	Loop(state bool)
-	LoopToggle()
+	LoopToggle() bool
 	Radio(state bool)
-	RadioToggle()
+	RadioToggle() bool
 	Shuffle(state bool)
-	ShuffleToggle()
+	ShuffleToggle() bool
 
 	State() playlist.State
 }

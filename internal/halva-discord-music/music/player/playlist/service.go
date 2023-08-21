@@ -18,26 +18,26 @@ type service struct {
 	shuffle bool
 
 	radioService radioService
-	*sync.Mutex
+	mx           *sync.Mutex
 }
 
 func New(radioService radioService) *service {
 	return &service{
 		radioService: radioService,
-		Mutex:        &sync.Mutex{},
+		mx:           &sync.Mutex{},
 		queue:        make([]psong.Item, 0, 25),
 	}
 }
 
 func (s *service) Add(item *psong.Item) {
-	s.Lock()
+	s.mx.Lock()
 	s.queue = append(s.queue, *item)
-	s.Unlock()
+	s.mx.Unlock()
 }
 
 func (s *service) Head() *psong.Item {
-	s.Lock()
-	defer s.Unlock()
+	s.mx.Lock()
+	defer s.mx.Unlock()
 
 	if len(s.queue) == 0 {
 		if s.radio {
@@ -66,18 +66,18 @@ func (s *service) Head() *psong.Item {
 }
 
 func (s *service) Remove(force bool) {
-	s.Lock()
+	s.mx.Lock()
 	if (s.loop && !force) || len(s.queue) == 0 {
-		s.Unlock()
+		s.mx.Unlock()
 		return
 	}
 	s.queue = s.queue[1:]
-	s.Unlock()
+	s.mx.Unlock()
 }
 
 func (s *service) Current() *psong.Item {
-	s.Lock()
-	defer s.Unlock()
+	s.mx.Lock()
+	defer s.mx.Unlock()
 
 	if len(s.queue) == 0 {
 		return nil
@@ -87,48 +87,54 @@ func (s *service) Current() *psong.Item {
 }
 
 func (s *service) Queue() []psong.Item {
-	s.Lock()
+	s.mx.Lock()
 	queue := make([]psong.Item, len(s.queue))
 	copy(queue, s.queue)
-	s.Unlock()
+	s.mx.Unlock()
 
 	return queue
 }
 
 func (s *service) Loop(state bool) {
-	s.Lock()
+	s.mx.Lock()
 	s.loop = state
-	s.Unlock()
+	s.mx.Unlock()
 }
 
-func (s *service) LoopToggle() {
-	s.Lock()
+func (s *service) LoopToggle() bool {
+	s.mx.Lock()
 	s.loop = !s.loop
-	s.Unlock()
+	loop := s.loop
+	s.mx.Unlock()
+	return loop
 }
 
 func (s *service) Radio(state bool) {
-	s.Lock()
+	s.mx.Lock()
 	s.radio = state
-	s.Unlock()
+	s.mx.Unlock()
 }
 
-func (s *service) RadioToggle() {
-	s.Lock()
+func (s *service) RadioToggle() bool {
+	s.mx.Lock()
 	s.radio = !s.radio
-	s.Unlock()
+	radio := s.radio
+	s.mx.Unlock()
+	return radio
 }
 
 func (s *service) Shuffle(state bool) {
-	s.Lock()
+	s.mx.Lock()
 	s.shuffle = state
-	s.Unlock()
+	s.mx.Unlock()
 }
 
-func (s *service) ShuffleToggle() {
-	s.Lock()
+func (s *service) ShuffleToggle() bool {
+	s.mx.Lock()
 	s.shuffle = !s.shuffle
-	s.Unlock()
+	shuffle := s.shuffle
+	s.mx.Unlock()
+	return shuffle
 }
 
 type State struct {
@@ -138,8 +144,8 @@ type State struct {
 }
 
 func (s *service) State() State {
-	s.Lock()
-	defer s.Unlock()
+	s.mx.Lock()
+	defer s.mx.Unlock()
 
 	return State{
 		Loop:    s.loop,

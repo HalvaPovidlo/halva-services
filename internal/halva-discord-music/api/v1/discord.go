@@ -27,6 +27,8 @@ const (
 	messageLoopDisabled    = ":x: **Loop disabled**"
 	messageRadioEnabled    = ":white_check_mark: **Radio enabled**"
 	messageRadioDisabled   = ":x: **Radio disabled**"
+	messageShuffleEnabled  = ":white_check_mark: **Shuffle enabled**"
+	messageShuffleDisabled = ":x: **Shuffle disabled**"
 	messageNotVoiceChannel = ":x: **You have to be in a voice channel to use this command**"
 )
 
@@ -163,8 +165,10 @@ func (h *discordHandler) msgRadio(ctx context.Context, c *gateway.MessageCreateE
 		return nil, errors.Wrap(err, "get user voice state")
 	}
 
-	h.player.RadioToggle(voiceState.ChannelID, contexts.GetTraceID(ctx))
-	return nil, nil
+	if h.player.RadioToggle(voiceState.ChannelID, contexts.GetTraceID(ctx)) {
+		return &api.SendMessageData{Content: messageRadioEnabled}, nil
+	}
+	return &api.SendMessageData{Content: messageRadioDisabled}, nil
 }
 
 func (h *discordHandler) cmdRadio(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
@@ -178,8 +182,10 @@ func (h *discordHandler) cmdRadio(ctx context.Context, data cmdroute.CommandData
 }
 
 func (h *discordHandler) msgLoop(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
-	h.player.LoopToggle()
-	return nil, nil
+	if h.player.LoopToggle() {
+		return &api.SendMessageData{Content: messageLoopEnabled}, nil
+	}
+	return &api.SendMessageData{Content: messageLoopDisabled}, nil
 }
 
 func (h *discordHandler) cmdLoop(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {
@@ -188,8 +194,10 @@ func (h *discordHandler) cmdLoop(ctx context.Context, data cmdroute.CommandData)
 }
 
 func (h *discordHandler) msgShuffle(ctx context.Context, c *gateway.MessageCreateEvent) (*api.SendMessageData, error) {
-	h.player.ShuffleToggle()
-	return nil, nil
+	if h.player.ShuffleToggle() {
+		return &api.SendMessageData{Content: messageShuffleEnabled}, nil
+	}
+	return &api.SendMessageData{Content: messageShuffleDisabled}, nil
 }
 
 func (h *discordHandler) cmdShuffle(ctx context.Context, data cmdroute.CommandData) (*api.InteractionResponseData, error) {

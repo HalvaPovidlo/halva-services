@@ -13,7 +13,7 @@ import (
 	"github.com/HalvaPovidlo/halva-services/cmd/halva-discord-music/config"
 	apiv1 "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/api/v1/socket"
-	pds "github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/discord"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/firestore"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player"
@@ -36,7 +36,7 @@ func main() {
 	logger := log.NewLogger(cfg.General.Debug)
 	ctx := contexts.WithLogger(context.Background(), logger)
 
-	pds.NewClient(cfg.Discord.Token)
+	discordClient := discord.NewClient(cfg.Discord, logger, cfg.General.Debug)
 
 	fireClient, err := fire.New(ctx, "halvabot-firebase.json")
 	if err != nil {
@@ -58,15 +58,18 @@ func main() {
 		logger.Fatal("failed to init downloader", zap.Error(err))
 	}
 
-	musicPlayer := player.New(ctx, playlist.New(), downloader, searcher, time.Duration(cfg.General.StateTicks)*time.Millisecond)
+	musicPlayer := player.New(ctx, playlist.New(searcher), downloader, time.Duration(cfg.General.StateTicks)*time.Millisecond)
 
-	handler := apiv1.New(ctx, musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
+	discordHandler := apiv1.NewDiscord(discordClient, musicPlayer, searcher)
+	discordHandler.RegisterRoutes()
+
+	handler := apiv1.New(ctx, discordClient, searcher, musicPlayer, socket.NewManager(ctx), jwt.New(cfg.General.Secret))
 
 	echoServer := echos.New()
 	echoServer.RegisterHandlers(handler)
 	echoServer.Run(cfg.General.Port, logger)
 
-	if err := pds.Connect(ctx); err != nil {
+	if err := discordClient.Connect(ctx); err != nil {
 		logger.Fatal("failed to discord connect: ", zap.Error(err))
 		return
 	}
@@ -83,6 +86,6 @@ func main() {
 	if err := echoServer.Shutdown(ctx); err != nil {
 		logger.Error("failed echo server shutdown", zap.Error(err))
 	}
-	pds.Close()
+	discordClient.Close()
 	logger.Info("stopped")
 }

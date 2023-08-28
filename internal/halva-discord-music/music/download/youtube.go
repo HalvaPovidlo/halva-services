@@ -2,10 +2,11 @@ package download
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
@@ -30,7 +31,11 @@ func (y *youtube) download(ctx context.Context, id string) (string, error) {
 
 	output, err := loader.Output()
 	if err != nil {
-		return "", fmt.Errorf("execute yt-dlp", err)
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", errors.Wrapf(exitErr, "execute ytdlp: %s", string(exitErr.Stderr))
+		}
+		return "", errors.Wrap(err, "execute ytdlp")
 	}
 	source := strings.TrimSuffix(string(output), "\n")
 	return source, nil

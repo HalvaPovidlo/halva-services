@@ -2,11 +2,13 @@ package search
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/pkg/errors"
 
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/firestore"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
@@ -25,7 +27,7 @@ type storageInterface interface {
 
 type Request struct {
 	Text    string
-	UserID  string
+	UserID  discord.UserID
 	Service psong.ServiceType
 }
 
@@ -63,18 +65,18 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 		case err == nil:
 			song.Count++
 			song.LastPlay = time.Now()
-			if err := s.storage.Set(ctx, request.UserID, song); err != nil {
-				return nil, fmt.Errorf("add song to storage: %+w", err)
+			if err := s.storage.Set(ctx, request.UserID.String(), song); err != nil {
+				return nil, errors.Wrap(err, "set song to storage")
 			}
 			return song, nil
 		case err != nil && !errors.Is(err, firestore.ErrNotFound):
-			return nil, fmt.Errorf("get song from storage: %+w", err)
+			return nil, errors.Wrap(err, "get song from storage")
 		}
 	}
 
 	song, err := s.youtube.search(ctx, request.Text)
 	if err != nil {
-		return nil, fmt.Errorf("search song on youtube: %+w", err)
+		return nil, errors.Wrap(err, "youtube search")
 	}
 
 	storageSong, err := s.storage.Get(ctx, song.ID)
@@ -82,11 +84,11 @@ func (s *service) searchYoutube(ctx context.Context, request *Request) (*psong.I
 	case err == nil:
 		song.Count = storageSong.Count + 1
 	case err != nil && !errors.Is(err, firestore.ErrNotFound):
-		return nil, fmt.Errorf("get song from storage: %+w", err)
+		return nil, errors.Wrap(err, "get song from storage")
 	}
 
-	if err := s.storage.Set(ctx, request.UserID, song); err != nil {
-		return nil, fmt.Errorf("add song to storage: %+w", err)
+	if err := s.storage.Set(ctx, request.UserID.String(), song); err != nil {
+		return nil, errors.Wrap(err, "set song to storage")
 	}
 
 	return song, nil
@@ -98,7 +100,7 @@ func (s *service) Radio(minPlaybacks int64) (*psong.Item, error) {
 		return nil, fmt.Errorf("get any song from storage")
 	}
 	if song.Service == "" {
-		song.Service = string(psong.ServiceYoutube)
+		song.Service = psong.ServiceYoutube
 	}
 
 	return song, nil

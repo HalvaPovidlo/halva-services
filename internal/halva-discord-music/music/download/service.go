@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pkg/errors"
+
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 )
 
@@ -14,12 +16,6 @@ const (
 )
 
 var ErrServiceUnknown = fmt.Errorf("service unknown")
-
-type Request struct {
-	ID      string
-	Source  string
-	Service psong.ServiceType
-}
 
 type service struct {
 	youtube *youtube
@@ -45,18 +41,18 @@ func New(outputDir string) (*service, error) {
 	}, nil
 }
 
-func (s *service) Download(ctx context.Context, request *Request) (source string, err error) {
+func (s *service) Download(ctx context.Context, request *psong.Item) (path string, err error) {
 	switch request.Service {
 	case psong.ServiceYoutube:
-		possibleSource := s.pwd + s.youtube.outDirPrefix() + request.ID + defaultFormat
+		possibleSource := s.pwd + s.youtube.outDirPrefix() + string(request.ID) + defaultFormat
 		if _, ok := s.counter[possibleSource]; ok {
-			source = possibleSource
+			path = possibleSource
 			break
 		}
 
-		source, err = s.youtube.download(ctx, request.Source)
+		path, err = s.youtube.download(ctx, request.URL)
 		if err != nil {
-			return "", fmt.Errorf("youtube download: %+w", err)
+			return "", errors.Wrap(err, "youtube download")
 		}
 	case psong.ServiceVK:
 		return "", ErrServiceUnknown
@@ -64,13 +60,13 @@ func (s *service) Download(ctx context.Context, request *Request) (source string
 		return "", ErrServiceUnknown
 	}
 
-	s.counter[source]++
-	return source, nil
+	s.counter[path]++
+	return path, nil
 }
 
-func (s *service) Delete(request *Request) error {
-	if _, ok := s.counter[request.Source]; ok {
-		s.counter[request.Source]--
+func (s *service) Delete(path string) error {
+	if _, ok := s.counter[path]; ok {
+		s.counter[path]--
 	}
 	return s.removeZeroes()
 }

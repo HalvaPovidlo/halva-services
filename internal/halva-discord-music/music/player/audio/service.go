@@ -146,7 +146,7 @@ func (s *Service) Idle() bool {
 }
 
 func (s *Service) Destroy() {
-	s.cancel()
+	s.Stop()
 	for {
 		select {
 		case s.workChan <- struct{}{}:

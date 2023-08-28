@@ -1,31 +1,34 @@
 // TODO: если бот отключился, то кидать событие destroy
+// TODO: stop downloader if skip current song +++ вынести загрузку в отедльный поток
+// можно сделать такую же схему как и с аудио с workChan и если загрузка не началась, то скипать событие
 package player
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/download"
 	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/audio"
-	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/search"
+	"github.com/HalvaPovidlo/halva-services/internal/halva-discord-music/music/player/playlist"
 	psong "github.com/HalvaPovidlo/halva-services/internal/pkg/song"
 	"github.com/HalvaPovidlo/halva-services/pkg/contexts"
 )
 
-const autoLeaveDuration = 2 * time.Minute
+const autoLeaveDuration = 3 * time.Minute
 
 var (
-	ErrDifferentVoiceChannel = fmt.Errorf("voice connected to a different voice channel")
-	ErrNullVoiceChannelID    = fmt.Errorf("null voice channel id")
+	//ErrDifferentVoiceChannel = fmt.Errorf("voice connected to a different voice channel")
+	ErrNullVoiceChannelID = fmt.Errorf("null voice channel id")
 )
 
 type ErrorHandler func(err error)
+
+type StateHandler func(state State)
 
 type AudioService interface {
 	Play(ctx context.Context, source string, position time.Duration) bool
@@ -38,104 +41,90 @@ type AudioService interface {
 }
 
 type Downloader interface {
-	Download(ctx context.Context, r *download.Request) (string, error)
-	Delete(r *download.Request) error
-}
-
-type Searcher interface {
-	Search(ctx context.Context, request *search.Request) (*psong.Item, error)
-	Radio(minPlaybacks int64) (*psong.Item, error)
+	Download(ctx context.Context, request *psong.Item) (string, error)
+	Delete(path string) error
 }
 
 type PlaylistManager interface {
+	Head() *psong.Item
+	Remove(force bool)
 	Add(item *psong.Item)
-	Peek() *psong.Item
+	Current() *psong.Item
 	Queue() []psong.Item
-	Remove()
-	RemoveForce()
-	Loop()
-	LoopDisable()
-	Shuffle()
-	ShuffleDisable()
+
+	Loop(state bool)
+	LoopToggle() bool
+	Radio(state bool)
+	RadioToggle() bool
+	Shuffle(state bool)
+	ShuffleToggle() bool
+
+	State() playlist.State
 }
 
 type State struct {
-	Current  psong.Item    `json:"current"`
+	Current  *psong.Item   `json:"current"`
 	Position time.Duration `json:"position"`
 	Length   time.Duration `json:"length"`
 	Loop     bool          `json:"loop"`
 	Radio    bool          `json:"radio"`
-	//Shuffle  bool          `json:"shuffle"`
-	Queue []psong.Item `json:"queue"`
+	Shuffle  bool          `json:"shuffle"`
+	Queue    []psong.Item  `json:"queue"`
 }
 
-type Service struct {
+type service struct {
 	audio      AudioService
 	playlist   PlaylistManager
 	downloader Downloader
-	searcher   Searcher
 
-	state           State
 	currentVoice    discord.ChannelID
-	commands        chan *Command
-	states          chan State
+	commands        chan *command
 	autoLeaveTicker *time.Ticker
 
 	errors        chan error
 	errorHandlers chan ErrorHandler
 
-	posMx        *sync.Mutex
-	songPosition audio.SongPosition
+	states        chan State
+	stateHandlers chan StateHandler
+	posMx         *sync.Mutex
+	songPosition  audio.SongPosition
 
 	ctx context.Context
 }
 
-func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, searcher Searcher, stateTick time.Duration) *Service {
-	player := &Service{
+func New(ctx context.Context, playlist PlaylistManager, downloader Downloader, stateTick time.Duration) *service {
+	player := &service{
 		ctx:        ctx,
 		playlist:   playlist,
 		downloader: downloader,
-		searcher:   searcher,
 
-		commands:        make(chan *Command),
-		states:          make(chan State),
+		commands:        make(chan *command),
 		autoLeaveTicker: time.NewTicker(autoLeaveDuration),
 
 		errors:        make(chan error),
 		errorHandlers: make(chan ErrorHandler),
 
-		posMx: &sync.Mutex{},
+		states:        make(chan State),
+		stateHandlers: make(chan StateHandler),
+		posMx:         &sync.Mutex{},
 	}
 
 	go player.processCommands(ctx)
 	go player.processOther(ctx, stateTick)
 	go player.processErrors(ctx)
+	go player.processStates(ctx)
 	return player
 }
 
-func (s *Service) Input() chan<- *Command {
-	return s.commands
-}
-
-func (s *Service) Status() <-chan State {
-	return s.states
-}
-
-func (s *Service) SubscribeOnErrors(h ErrorHandler) {
-	go func() {
-		s.errorHandlers <- h
-	}()
-}
-
-func (s *Service) processCommands(ctx context.Context) {
+func (s *service) processCommands(ctx context.Context) {
 	defer close(s.commands)
 	for {
 		select {
 		case cmd := <-s.commands:
-			ctx, logger := cmd.ContextLogger(ctx)
+			ctx, logger := cmd.contextLogger(ctx)
 			if err := s.processCommand(cmd, ctx, logger); err != nil {
 				s.error(logger, err)
-				if cmd.Type == commandPlay && !errors.Is(err, ErrNullVoiceChannelID) {
+				if cmd.typ == commandPlay && !errors.Is(err, ErrNullVoiceChannelID) {
 					cmd := cmd
 					go func() { s.commands <- cmd }()
 				}
@@ -146,29 +135,26 @@ func (s *Service) processCommands(ctx context.Context) {
 	}
 }
 
-func (s *Service) processCommand(cmd *Command, ctx context.Context, logger *zap.Logger) error {
-	handled, err := s.processPrivateCommand(cmd, ctx, logger)
-	if err != nil || handled {
-		return err
-	}
-
-	handled, err = s.processPublicCommand(cmd, ctx, logger)
-	if err != nil || handled {
-		return err
-	}
-
-	return fmt.Errorf("unknown command: %s", cmd.Type)
-}
-
-func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logger *zap.Logger) (bool, error) {
-	switch cmd.Type {
+func (s *service) processCommand(cmd *command, ctx context.Context, logger *zap.Logger) error {
+	switch cmd.typ {
 	case commandPlay:
-		return true, s.play(ctx, cmd.VoiceChannelID)
-	case commandRemove:
-		s.playlist.Remove()
+		logger.Info("process command")
+		return s.play(ctx, cmd.voiceChannelID)
+	case commandSkip:
+		logger.Info("process command")
+		if s.audio != nil {
+			s.audio.Stop()
+		}
+	case commandDisconnect:
+		logger.Info("process command")
+		if s.audio != nil {
+			s.audio.Destroy()
+			s.audio = nil
+			s.currentVoice = discord.NullChannelID
+		}
 	case commandDeleteSong:
-		if err := s.downloader.Delete(cmd.downloadRequest); err != nil {
-			return false, fmt.Errorf("delete song")
+		if err := s.downloader.Delete(cmd.source); err != nil {
+			return errors.Wrap(err, "delete song")
 		}
 	case commandSendState:
 		s.sendState()
@@ -178,70 +164,12 @@ func (s *Service) processPrivateCommand(cmd *Command, ctx context.Context, logge
 			s.audio = nil
 			s.currentVoice = discord.NullChannelID
 		}
-	case CommandDisconnect:
-		if s.audio != nil {
-			s.audio.Destroy()
-			s.audio = nil
-			s.currentVoice = discord.NullChannelID
-		}
-	default:
-		return false, nil
 	}
 
-	return true, nil
+	return nil
 }
 
-func (s *Service) processPublicCommand(cmd *Command, ctx context.Context, logger *zap.Logger) (bool, error) {
-	if s.audio != nil && cmd.VoiceChannelID != s.currentVoice {
-		return false, ErrDifferentVoiceChannel
-	}
-
-	logger.Info("process command")
-	switch cmd.Type {
-	case CommandSkip:
-		if s.audio != nil {
-			s.playlist.RemoveForce()
-			s.audio.Stop()
-		}
-	case CommandEnqueue:
-		song, err := s.searcher.Search(ctx, cmd.SearchRequest)
-		if err != nil {
-			return false, fmt.Errorf("search song %s: %+w", cmd.SearchRequest.Text, err)
-		}
-		s.playlist.Add(song)
-
-		s.sendPlayIfNotConnected(cmd)
-	case CommandRadio:
-		s.state.Radio = true
-		s.sendPlayIfNotConnected(cmd)
-	case CommandRadioOff:
-		s.state.Radio = false
-	case CommandLoop:
-		s.state.Loop = true
-		s.playlist.Loop()
-	case CommandLoopOff:
-		s.state.Loop = false
-		s.playlist.LoopDisable()
-	case CommandShuffle:
-		//s.state.Shuffle = true
-		s.playlist.Shuffle()
-	case CommandShuffleOff:
-		//s.state.Shuffle = false
-		s.playlist.ShuffleDisable()
-	case CommandDisconnect:
-		if s.audio != nil {
-			s.audio.Destroy()
-			s.audio = nil
-			s.currentVoice = discord.NullChannelID
-		}
-	default:
-		return false, nil
-	}
-
-	return true, nil
-}
-
-func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) error {
+func (s *service) play(ctx context.Context, voiceChannel discord.ChannelID) error {
 	var err error
 	if s.audio == nil {
 		if voiceChannel == discord.NullChannelID {
@@ -249,7 +177,7 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		}
 		s.audio, err = audio.New(ctx, voiceChannel)
 		if err != nil {
-			return fmt.Errorf("create new audio session: %+w", err)
+			return errors.Wrap(err, "create new audio session")
 		}
 		s.currentVoice = voiceChannel
 		go s.listenAudioInstance(s.ctx)
@@ -259,41 +187,26 @@ func (s *Service) play(ctx context.Context, voiceChannel discord.ChannelID) erro
 		return nil
 	}
 
-	song := s.playlist.Peek()
+	song := s.playlist.Head()
 	if song == nil {
-		if s.state.Radio {
-			song, err = s.searcher.Radio(3)
-			if err != nil {
-				return fmt.Errorf("get radio song: %+w", err)
-			}
-		} else {
-			s.state.Current = psong.Item{}
-			return nil
-		}
+		return nil
 	}
 
-	logger := contexts.GetLogger(ctx)
-	logger.Debug("download song", zap.String("url", song.URL))
-	song.FilePath, err = s.downloader.Download(ctx, &download.Request{
-		ID:      string(song.ID),
-		Source:  song.URL,
-		Service: psong.ServiceType(song.Service),
-	})
+	logger := contexts.GetLogger(ctx).With(zap.String("url", song.URL), zap.String("title", song.Title))
+	logger.Info("download song")
+	filePath, err := s.downloader.Download(ctx, song)
 	if err != nil {
-		s.playlist.RemoveForce()
-		return fmt.Errorf("download song, %s: %+w", song.URL, err)
+		// song is not available anymore, so we remove it from playlist
+		s.playlist.Remove(true)
+		return errors.Wrapf(err, "download song url %s", song.URL)
 	}
 
-	logger.Info("play song", zap.String("title", song.Title))
-	if s.audio.Play(ctx, song.FilePath, 0) {
-		s.state.Current = *song
-		//s.playlist.Remove()
-	}
-
+	logger.Info("play song")
+	s.audio.Play(ctx, filePath, 0)
 	return nil
 }
 
-func (s *Service) listenAudioInstance(ctx context.Context) {
+func (s *service) listenAudioInstance(ctx context.Context) {
 	finished := s.audio.Finished()
 	ticks := s.audio.SongPosition()
 	for {
@@ -303,11 +216,9 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 				return
 			}
 			s.autoLeaveTicker.Reset(autoLeaveDuration)
-			s.commands <- &Command{Type: commandRemove}
-			s.commands <- &Command{Type: commandPlay}
-			s.commands <- &Command{Type: commandDeleteSong, downloadRequest: &download.Request{
-				Source: source,
-			}}
+			s.playlist.Remove(false)
+			s.commands <- &command{typ: commandPlay}
+			s.commands <- &command{typ: commandDeleteSong, source: source}
 
 			s.posMx.Lock()
 			s.songPosition.Length = 0
@@ -325,23 +236,23 @@ func (s *Service) listenAudioInstance(ctx context.Context) {
 	}
 }
 
-func (s *Service) processOther(ctx context.Context, duration time.Duration) {
+func (s *service) processOther(ctx context.Context, duration time.Duration) {
 	t := time.NewTicker(duration)
 	defer t.Stop()
 	defer s.autoLeaveTicker.Stop()
 	for {
 		select {
 		case <-t.C:
-			s.commands <- &Command{Type: commandSendState}
+			s.commands <- &command{typ: commandSendState}
 		case <-s.autoLeaveTicker.C:
-			s.commands <- &Command{Type: commandDisconnectIdle}
+			s.commands <- &command{typ: commandDisconnectIdle}
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *Service) error(logger *zap.Logger, err error) {
+func (s *service) error(logger *zap.Logger, err error) {
 	if err == nil {
 		return
 	}
@@ -351,8 +262,8 @@ func (s *Service) error(logger *zap.Logger, err error) {
 	}()
 }
 
-func (s *Service) processErrors(ctx context.Context) {
-	handlers := make([]ErrorHandler, 0)
+func (s *service) processErrors(ctx context.Context) {
+	handlers := make([]ErrorHandler, 0, 2)
 	defer close(s.errorHandlers)
 	for {
 		select {
@@ -371,23 +282,43 @@ func (s *Service) processErrors(ctx context.Context) {
 	}
 }
 
-func (s *Service) sendPlayIfNotConnected(cmd *Command) {
-	if s.audio == nil && cmd.VoiceChannelID != discord.NullChannelID {
-		cmd := *cmd
-		cmd.Type = commandPlay
-		go func() {
-			s.commands <- &cmd
-		}()
+func (s *service) processStates(ctx context.Context) {
+	handlers := make([]StateHandler, 0, 2)
+	defer close(s.stateHandlers)
+	for {
+		select {
+		case state, ok := <-s.states:
+			if !ok {
+				return
+			}
+			for _, h := range handlers {
+				go h(state)
+			}
+		case h := <-s.stateHandlers:
+			handlers = append(handlers, h)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
-func (s *Service) sendState() {
+func (s *service) sendState() {
 	s.posMx.Lock()
-	s.state.Position = s.songPosition.Elapsed
-	s.state.Length = s.songPosition.Length
+	pos := s.songPosition.Elapsed
+	length := s.songPosition.Length
 	s.posMx.Unlock()
 
-	s.state.Queue = s.playlist.Queue()
-	s.states <- s.state
-	//go func() { s.states <- s.state }()
+	queue := s.playlist.Queue()
+	state := s.playlist.State()
+	go func() {
+		s.states <- State{
+			Current:  s.playlist.Current(),
+			Position: pos,
+			Length:   length,
+			Loop:     state.Loop,
+			Radio:    state.Radio,
+			Shuffle:  state.Shuffle,
+			Queue:    queue,
+		}
+	}()
 }
